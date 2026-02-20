@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Smart Reminder</title>
+    
+    <!-- PWA Manifest (embedded) -->
+    <link rel="manifest" href="data:application/manifest+json,{
+        &quot;name&quot;:&quot;Smart Reminder&quot;,
+        &quot;short_name&quot;:&quot;Reminder&quot;,
+        &quot;start_url&quot;:&quot;.&quot;,
+        &quot;display&quot;:&quot;standalone&quot;,
+        &quot;background_color&quot;:&quot;#0f172a&quot;,
+        &quot;theme_color&quot;:&quot;#6366f1&quot;,
+        &quot;icons&quot;:[{&quot;src&quot;:&quot;https://cdn-icons-png.flaticon.com/512/3239/3239952.png&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/png&quot;}]
+    }">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #0f172a; 
+            color: #f1f5f9; 
+            min-height: 100vh; 
+            padding: 15px;
+            padding-bottom: 80px;
+        }
+        .container { max-width: 100%; margin: 0 auto; }
+        
+        /* Header */
+        header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 10px 0 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+        .logo { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .logo i { color: #6366f1; }
+        
+        /* Install Button */
+        #installBtn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: none;
+        }
+        #installBtn.show { display: block; }
+        
+        /* Input Area */
+        .input-group { 
+            background: #1e293b; 
+            padding: 8px; 
+            border-radius: 16px; 
+            display: flex; 
+            gap: 8px; 
+            border: 1px solid #334155;
+            margin-bottom: 15px;
+        }
+        input { 
+            flex: 1; 
+            background: transparent; 
+            border: none; 
+            color: white; 
+            padding: 12px; 
+            font-size: 1rem; 
+            outline: none; 
+            min-width: 0;
+        }
+        .action-btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .action-btn:active { transform: scale(0.95); }
+        .action-btn.mic.listening { background: #ef4444; animation: pulse 1s infinite; }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        /* Date Widget */
+        .date-widget {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 15px;
+            border: 1px solid #334155;
+        }
+        .date-big { font-size: 2rem; font-weight: 700; color: #6366f1; }
+        .date-day { color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; }
+        
+        /* Stats */
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+        .stat-card { 
+            background: #1e293b; 
+            padding: 12px 8px; 
+            border-radius: 12px; 
+            text-align: center; 
+            border: 1px solid #334155;
+        }
+        .stat-num { font-size: 1.3rem; font-weight: 700; color: #6366f1; }
+        .stat-num.today { color: #10b981; }
+        .stat-num.done { color: #94a3b8; }
+        .stat-label { font-size: 0.75rem; color: #94a3b8; }
+        
+        /* List */
+        .reminder-list { display: flex; flex-direction: column; gap: 10px; }
+        .reminder-item {
+            background: #1e293b;
+            padding: 14px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #6366f1;
+        }
+        .reminder-item.completed { border-left-color: #10b981; opacity: 0.7; }
+        .reminder-item.overdue { border-left-color: #ef4444; }
+        
+        .r-info { flex: 1; min-width: 0; }
+        .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .r-info p { font-size: 0.8rem; color: #94a3b8; }
+        
+        .actions { display: flex; gap: 6px; margin-left: 10px; }
+        .btn-icon {
+            background: #0f172a;
+            border: none;
+            color: #94a3b8;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+        .btn-icon:active { background: #334155; }
+        
+        /* Empty State */
+        .empty { text-align: center; padding: 30px 20px; color: #94a3b8; }
+        .empty i { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
+        .empty p { font-size: 0.9rem; line-height: 1.4; }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1e293b;
+            padding: 14px 20px;
+            border-radius: 12px;
+            border-left: 4px solid #6366f1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.3s;
+            z-index: 100;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .toast i { font-size: 1.2rem; }
+        
+        /* Install Help */
+        .install-help {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border: 1px dashed #6366f1;
+            display: none;
+        }
+        .install-help.show { display: block; }
+        .install-help h4 { margin-bottom: 8px; color: #6366f1; }
+        .install-help ol { padding-left: 20px; font-size: 0.85rem; color: #94a3b8; line-height: 1.6; }
+        
+        /* Suggestions */
+        .suggestions { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+        .suggestion-tag {
+            background: #0f172a;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            border: 1px solid #334155;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 400px) {
+            .stats { grid-template-columns: 1fr; }
+            header { flex-wrap: wrap; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-bolt"></i>
+                <span>Smart Reminder</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button id="installBtn"><i class="fas fa-download"></i> Install</button>
+                <button class="action-btn" id="notifBtn" title="Enable Notifications">
+                    <i class="fas fa-bell"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Install Help (shows on mobile) -->
+        <div id="installHelp" class="install-help">
+            <h4>📱 Add to Home Screen</h4>
+            <ol>
+                <li><b>Chrome:</b> Tap ⋮ → "Add to Home screen"</li>
+                <li><b>Samsung Internet:</b> Tap ☰ → "Add page to" → "Home screen"</li>
+                <li><b>Firefox:</b> Tap ⋮ → "Page" → "Add to Home screen"</li>
+            </ol>
+        </div>
+
+        <!-- Date Widget -->
+        <div class="date-widget">
+            <div class="date-day" id="currentDay">Monday</div>
+            <div class="date-big" id="currentDate">24</div>
+            <div style="font-size: 0.9rem; margin-top: 3px; color: #94a3b8;" id="currentMonth">Oct 2024</div>
+        </div>
+
+        <!-- Input with Voice -->
+        <div class="input-group">
+            <button class="action-btn mic" id="micBtn" title="Tap to speak">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Call mom in 10 mins'">
+            <button class="action-btn" id="addBtn" title="Add reminder">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
+        
+        <!-- Quick Suggestions -->
+        <div class="suggestions">
+            <span class="suggestion-tag" data-text="Take medicine in 30 minutes">💊 Medicine</span>
+            <span class="suggestion-tag" data-text="Meeting tomorrow at 3pm">📅 Meeting</span>
+            <span class="suggestion-tag" data-text="Pay bills tonight at 8pm">💰 Bills</span>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-num" id="countPending">0</div>
+                <div class="stat-label">Pending</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num today" id="countToday">0</div>
+                <div class="stat-label">Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num done" id="countDone">0</div>
+                <div class="stat-label">Done</div>
+            </div>
+        </div>
+
+        <!-- List -->
+        <div id="reminderList" class="reminder-list"></div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMsg">Reminder added</span>
+    </div>
+
+    <script>
+        class ReminderApp {
+            constructor() {
+                this.reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+                this.isListening = false;
+                this.init();
+            }
+
+            init() {
+                this.updateDate();
+                this.render();
+                this.setupEvents();
+                this.startScheduler();
+                this.checkInstallPrompt();
+                this.initVoice();
+            }
+
+            updateDate() {
+                const now = new Date();
+                document.getElementById('currentDay').textContent = now.toLocaleDateString('en-US', { weekday: 'long' });
+                document.getElementById('currentDate').textContent = now.getDate();
+                document.getElementById('currentMonth').textContent = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            }
+
+            setupEvents() {
+                // Add reminder
+                document.getElementById('addBtn').addEventListener('click', () => this.addReminder());
+                document.getElementById('taskInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.addReminder();
+                });
+
+                // Voice input
+                document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
+
+                // Suggestions
+                document.querySelectorAll('.suggestion-tag').forEach(tag => {
+                    tag.addEventListener('click', () => {
+                        document.getElementById('taskInput').value = tag.dataset.text;
+                        this.addReminder();
+                    });
+                });
+
+                // Notifications
+                document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
+
+                // Install button
+                document.getElementById('installBtn').addEventListener('click', () => {
+                    if (window.deferredPrompt) {
+                        window.deferredPrompt.prompt();
+                        window.deferredPrompt.userChoice.then(() => {
+                            document.getElementById('installBtn').classList.remove('show');
+                            document.getElementById('installHelp').classList.remove('show');
+                        });
+                    }
+                });
+            }
+
+            // Voice Recognition Setup
+            initVoice() {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = false;
+                    this.recognition.lang = 'en-US';
+
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        document.getElementById('taskInput').value = transcript;
+                        this.addReminder();
+                    };
+
+                    this.recognition.onend = () => {
+                        this.isListening = false;
+                        document.getElementById('micBtn').classList.remove('listening');
+                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                    };
+
+                    this.recognition.onerror = (event) => {
+                        console.error('Speech error:', event.error);
+                        this.isListening = false;
+                        document.getElementById('micBtn').classList.remove('listening');
+                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                        this.showToast('🎤 Voice error. Try typing instead.');
+                    };
+                } else {
+                    document.getElementById('micBtn').style.display = 'none';
+                    document.getElementById('taskInput').placeholder = "Type reminder: 'Meeting tomorrow 2pm'";
+                }
+            }
+
+            toggleVoice() {
+                if (!this.recognition) {
+                    this.showToast('🎤 Voice not supported on this browser');
+                    return;
+                }
+
+                if (this.isListening) {
+                    this.recognition.stop();
+                    this.isListening = false;
+                    document.getElementById('micBtn').classList.remove('listening');
+                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                } else {
+                    this.recognition.start();
+                    this.isListening = true;
+                    document.getElementById('micBtn').classList.add('listening');
+                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
+                    this.showToast('🎤 Listening... speak now');
+                }
+            }
+
+            // Smart time parser
+            parseTime(text) {
+                const now = new Date();
+                let target = new Date(now);
+                const lower = text.toLowerCase();
+
+                // "in X minutes/hours/days"
+                const inMatch = lower.match(/in\s+(\d+)\s*(min|minute|minutes|hour|hours|hr|hrs|day|days)/);
+                if (inMatch) {
+                    const val = parseInt(inMatch[1]);
+                    const unit = inMatch[2];
+                    if (unit.startsWith('min')) target.setMinutes(target.getMinutes() + val);
+                    else if (unit.startsWith('hour')) target.setHours(target.getHours() + val);
+                    else if (unit.startsWith('day')) target.setDate(target.getDate() + val);
+                    return target;
+                }
+
+                // "tomorrow"
+                if (lower.includes('tomorrow')) {
+                    target.setDate(target.getDate() + 1);
+                    if (!lower.match(/\d+\s*(am|pm|:)/)) target.setHours(9, 0, 0, 0);
+                    return target;
+                }
+
+                // "today"
+                if (lower.includes('today')) {
+                    // keep same day
+                    if (!lower.match(/\d+\s*(am|pm|:)/)) target.setHours(9, 0, 0, 0);
+                    return target;
+                }
+
+                // Time: "at 5pm", "2:30 pm", "14:00"
+                const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+                if (timeMatch) {
+                    let hours = parseInt(timeMatch[1]);
+                    const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+                    const ampm = timeMatch[3];
+                    
+                    if (ampm) {
+                        if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+                        if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+                    }
+                    target.setHours(hours, minutes, 0, 0);
+                    
+                    // If time passed today and no "today" keyword, assume tomorrow
+                    if (target < now && !lower.includes('today')) {
+                        target.setDate(target.getDate() + 1);
+                    }
+                    return target;
+                }
+
+                // Default: 1 hour from now
+                target.setHours(target.getHours() + 1);
+                return target;
+            }
+
+            addReminder() {
+                const input = document.getElementById('taskInput');
+                const text = input.value.trim();
+                if (!text) {
+                    this.showToast('Please enter a reminder');
+                    return;
+                }
+
+                const scheduledTime = this.parseTime(text);
+                const reminder = {
+                    id: Date.now(),
+                    text: text,
+                    time: scheduledTime.getTime(),
+                    completed: false,
+                    notified: false
+                };
+
+                this.reminders.push(reminder);
+                this.save();
+                this.render();
+                
+                input.value = '';
+                this.showToast(`✓ Set for ${scheduledTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
+            }
+
+            toggleComplete(id) {
+                const r = this.reminders.find(x => x.id === id);
+                if (r) {
+                    r.completed = !r.completed;
+                    this.save();
+                    this.render();
+                }
+            }
+
+            delete(id) {
+                this.reminders = this.reminders.filter(x => x.id !== id);
+                this.save();
+                this.render();
+            }
+
+            save() {
+                localStorage.setItem('reminders', JSON.stringify(this.reminders));
+            }
+
+            render() {
+                const list = document.getElementById('reminderList');
+                const now = Date.now();
+                
+                // Sort: pending first, then by time
+                this.reminders.sort((a, b) => {
+                    if (a.completed === b.completed) return a.time - b.time;
+                    return a.completed ? 1 : -1;
+                });
+
+                // Update stats
+                document.getElementById('countPending').textContent = this.reminders.filter(r => !r.completed).length;
+                document.getElementById('countToday').textContent = this.reminders.filter(r => 
+                    !r.completed && new Date(r.time).toDateString() === new Date().toDateString()
+                ).length;
+                document.getElementById('countDone').textContent = this.reminders.filter(r => r.completed).length;
+
+                if (this.reminders.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty">
+                            <i class="fas fa-clipboard-list"></i>
+                            <p>No reminders yet.<br><br>💡 Try:<br>"Call mom in 10 mins"<br>"Meeting tomorrow at 3pm"</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                list.innerHTML = this.reminders.map(r => {
+                    const date = new Date(r.time);
+                    const isOverdue = !r.completed && r.time < now;
+                    const timeStr = date.toLocaleString([], { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    
+                    return `
+                        <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
+                            <div class="r-info">
+                                <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
+                                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '• <span style="color:#ef4444">Overdue</span>' : ''}</p>
+                            </div>
+                            <div class="actions">
+                                <button class="btn-icon" onclick="app.toggleComplete(${r.id})">
+                                    <i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i>
+                                </button>
+                                <button class="btn-icon" onclick="app.delete(${r.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            startScheduler() {
+                setInterval(() => {
+                    const now = Date.now();
+                    this.reminders.forEach(r => {
+                        if (!r.completed && !r.notified && r.time <= now) {
+                            this.triggerNotification(r);
+                            r.notified = true;
+                            this.save();
+                            this.render();
+                        }
+                    });
+                }, 5000);
+            }
+
+            triggerNotification(r) {
+                // Browser notification
+                if (Notification.permission === 'granted') {
+                    new Notification('⏰ Reminder!', {
+                        body: r.text,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                        tag: r.id
+                    });
+                }
+                
+                // Play sound
+                try {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.volume = 0.5;
+                    audio.play().catch(() => {});
+                } catch(e) {}
+                
+                this.showToast(`🔔 ${r.text}`);
+            }
+
+            requestNotifPermission() {
+                if (!('Notification' in window)) {
+                    this.showToast('Notifications not supported');
+                    return;
+                }
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        this.showToast('✓ Notifications enabled');
+                        document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
+                    } else {
+                        this.showToast('Notifications denied');
+                    }
+                });
+            }
+
+            showToast(msg) {
+                const toast = document.getElementById('toast');
+                document.getElementById('toastMsg').textContent = msg;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+
+            // PWA Install Prompt
+            checkInstallPrompt() {
+                // Show install help on mobile
+                if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                    document.getElementById('installHelp').classList.add('show');
+                }
+                
+                // Chrome install prompt
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    window.deferredPrompt = e;
+                    document.getElementById('installBtn').classList.add('show');
+                });
+                
+                // Hide install button after install
+                window.addEventListener('appinstalled', () => {
+                    document.getElementById('installBtn').classList.remove('show');
+                    document.getElementById('installHelp').classList.remove('show');
+                    this.showToast('✓ App installed!');
+                });
+            }
+        }
+
+        // Initialize app
+        const app = new ReminderApp();
+    </script>
+</body>
+</html>
