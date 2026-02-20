@@ -2,213 +2,57 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#6366f1">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Smart Reminder</title>
     <link rel="manifest" href="manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: #0f172a; 
-            color: #f1f5f9; 
-            min-height: 100vh; 
-            padding: 15px;
-            padding-bottom: 80px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f1f5f9; min-height: 100vh; padding: 15px; }
         .container { max-width: 600px; margin: 0 auto; }
-        header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 10px 0 20px;
-            border-bottom: 1px solid #334155;
-            margin-bottom: 20px;
-        }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 20px; border-bottom: 1px solid #334155; margin-bottom: 20px; }
         .logo { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
         .logo i { color: #6366f1; }
-        .input-group { 
-            background: #1e293b; 
-            padding: 8px; 
-            border-radius: 16px; 
-            display: flex; 
-            gap: 8px; 
-            border: 1px solid #334155;
-            margin-bottom: 15px;
-        }
-        input { 
-            flex: 1; 
-            background: transparent; 
-            border: none; 
-            color: white; 
-            padding: 12px; 
-            font-size: 1rem; 
-            outline: none; 
-            min-width: 0;
-        }
-        .action-btn {
-            background: #6366f1;
-            color: white;
-            border: none;
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            transition: all 0.2s;
-        }
-        .action-btn:active { transform: scale(0.95); background: #4f46e5; }
-        .action-btn.mic.listening { background: #ef4444; animation: pulse 1s infinite; }
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-        }
-        .date-widget {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 15px;
-            border: 1px solid #334155;
-        }
+        .input-group { background: #1e293b; padding: 8px; border-radius: 16px; display: flex; gap: 8px; border: 1px solid #334155; margin-bottom: 15px; }
+        input { flex: 1; background: transparent; border: none; color: white; padding: 12px; font-size: 1rem; outline: none; }
+        .action-btn { background: #6366f1; color: white; border: none; width: 45px; height: 45px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .date-widget { background: #1e293b; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .date-big { font-size: 2rem; font-weight: 700; color: #6366f1; }
-        .date-day { color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; }
+        .date-day { color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; }
         .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
-        .stat-card { 
-            background: #1e293b; 
-            padding: 12px 8px; 
-            border-radius: 12px; 
-            text-align: center; 
-            border: 1px solid #334155;
-        }
+        .stat-card { background: #1e293b; padding: 12px 8px; border-radius: 12px; text-align: center; }
         .stat-num { font-size: 1.3rem; font-weight: 700; color: #6366f1; }
-        .stat-num.today { color: #10b981; }
         .stat-label { font-size: 0.75rem; color: #94a3b8; }
         .reminder-list { display: flex; flex-direction: column; gap: 10px; }
-        .reminder-item {
-            background: #1e293b;
-            padding: 14px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 4px solid #6366f1;
-            animation: slideIn 0.3s ease;
-        }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
+        .reminder-item { background: #1e293b; padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #6366f1; }
         .reminder-item.completed { border-left-color: #10b981; opacity: 0.7; }
-        .reminder-item.overdue { border-left-color: #ef4444; }
-        .r-info { flex: 1; min-width: 0; }
-        .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
         .r-info p { font-size: 0.8rem; color: #94a3b8; }
-        .actions { display: flex; gap: 6px; margin-left: 10px; }
-        .btn-icon {
-            background: #0f172a;
-            border: none;
-            color: #94a3b8;
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-        .btn-icon:active { background: #334155; color: white; }
-        .empty { text-align: center; padding: 40px 20px; color: #94a3b8; }
-        .empty i { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: #1e293b;
-            padding: 14px 20px;
-            border-radius: 12px;
-            border-left: 4px solid #6366f1;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: transform 0.3s;
-            z-index: 100;
-            max-width: 90%;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
+        .actions { display: flex; gap: 6px; }
+        .btn-icon { background: #0f172a; border: none; color: #94a3b8; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; }
+        .empty { text-align: center; padding: 40px; color: #94a3b8; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1e293b; padding: 14px 20px; border-radius: 12px; border-left: 4px solid #6366f1; transition: transform 0.3s; z-index: 100; display: flex; align-items: center; gap: 10px; }
         .toast.show { transform: translateX(-50%) translateY(0); }
-        .install-help {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 15px 0;
-            border: 1px dashed #6366f1;
-            display: none;
-            font-size: 0.9rem;
-        }
+        .install-help { background: #1e293b; padding: 15px; border-radius: 12px; margin: 15px 0; display: none; }
         .install-help.show { display: block; }
         .suggestions { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
-        .suggestion-tag {
-            background: #0f172a;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            border: 1px solid #334155;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .suggestion-tag:active { background: #6366f1; border-color: #6366f1; }
-        .perm-banner {
-            background: #fef3c7;
-            color: #92400e;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            display: none;
-            font-size: 0.9rem;
-        }
-        .perm-banner.show { display: block; }
-        .perm-banner button {
-            background: #92400e;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            margin-left: 10px;
-            cursor: pointer;
-        }
+        .suggestion-tag { background: #0f172a; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #334155; }
+        .debug-info { background: #1e293b; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 0.8rem; color: #94a3b8; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="logo">
-                <i class="fas fa-bolt"></i>
-                <span>Smart Reminder</span>
-            </div>
-            <button class="action-btn" id="notifBtn" title="Enable Notifications">
-                <i class="fas fa-bell"></i>
-            </button>
+            <div class="logo"><i class="fas fa-bolt"></i><span>Smart Reminder</span></div>
+            <button class="action-btn" id="notifBtn"><i class="fas fa-bell"></i></button>
         </header>
 
-        <div class="install-help show" id="installHelp">
-            📱 <b>Install App:</b> Tap ⋮ → "Add to Home screen"
-        </div>
-
-        <div class="perm-banner" id="permBanner">
-            ⚠️ Notifications blocked! 
-            <button onclick="app.openPermSettings()">Enable</button>
-        </div>
+        <div class="install-help show" id="installHelp">📱 <b>Install:</b> Tap ⋮ → "Add to Home screen"</div>
+        
+        <!-- Debug Info -->
+        <div class="debug-info" id="debugInfo">Checking scheduler...</div>
 
         <div class="date-widget">
             <div class="date-day" id="currentDay">Friday</div>
@@ -217,60 +61,36 @@
         </div>
 
         <div class="input-group">
-            <button class="action-btn mic" id="micBtn" title="Tap to speak">
-                <i class="fas fa-microphone"></i>
-            </button>
-            <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Call mom in 10 mins'">
-            <button class="action-btn" id="addBtn" title="Add reminder">
-                <i class="fas fa-plus"></i>
-            </button>
+            <input type="text" id="taskInput" placeholder="Type: 'Test in 1 minute'">
+            <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
         </div>
         
         <div class="suggestions">
-            <span class="suggestion-tag" data-text="Take medicine in 30 minutes">💊 Medicine</span>
+            <span class="suggestion-tag" data-text="Test reminder in 1 minute">⏱️ Test 1 min</span>
             <span class="suggestion-tag" data-text="Meeting tomorrow at 3pm">📅 Meeting</span>
-            <span class="suggestion-tag" data-text="Pay bills tonight at 8pm">💰 Bills</span>
         </div>
 
         <div class="stats">
-            <div class="stat-card">
-                <div class="stat-num" id="countPending">0</div>
-                <div class="stat-label">Pending</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num today" id="countToday">0</div>
-                <div class="stat-label">Today</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num" id="countDone">0</div>
-                <div class="stat-label">Done</div>
-            </div>
+            <div class="stat-card"><div class="stat-num" id="countPending">0</div><div class="stat-label">Pending</div></div>
+            <div class="stat-card"><div class="stat-num" id="countToday">0</div><div class="stat-label">Today</div></div>
+            <div class="stat-card"><div class="stat-num" id="countDone">0</div><div class="stat-label">Done</div></div>
         </div>
 
         <div id="reminderList" class="reminder-list"></div>
     </div>
 
-    <div id="toast" class="toast">
-        <i class="fas fa-check-circle"></i>
-        <span id="toastMsg">Reminder added</span>
-    </div>
+    <div id="toast" class="toast"><i class="fas fa-bell"></i><span id="toastMsg">Reminder</span></div>
+
+    <!-- Hidden Audio Element -->
+    <audio id="notifSound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
 
     <script>
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('data:text/javascript,' + encodeURIComponent(`
-                    self.addEventListener('install', e => self.skipWaiting());
-                    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-                    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
-                `)).catch(() => console.log('SW registered'));
-            });
-        }
-
         class ReminderApp {
             constructor() {
                 this.reminders = JSON.parse(localStorage.getItem('reminders')) || [];
-                this.isListening = false;
+                this.audio = document.getElementById('notifSound');
                 this.init();
             }
 
@@ -279,9 +99,8 @@
                 this.render();
                 this.setupEvents();
                 this.startScheduler();
-                this.initVoice();
-                this.checkNotifStatus();
-                this.checkInstallPrompt();
+                this.requestNotifPermission();
+                this.updateDebugInfo();
             }
 
             updateDate() {
@@ -297,7 +116,6 @@
                     if (e.key === 'Enter') this.addReminder();
                 });
                 document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
-                document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
                 
                 document.querySelectorAll('.suggestion-tag').forEach(tag => {
                     tag.addEventListener('click', () => {
@@ -305,64 +123,14 @@
                         this.addReminder();
                     });
                 });
-            }
 
-            initVoice() {
-                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    this.recognition = new SpeechRecognition();
-                    this.recognition.continuous = false;
-                    this.recognition.interimResults = false;
-                    this.recognition.lang = 'en-US';
-
-                    this.recognition.onresult = (event) => {
-                        const transcript = event.results[0][0].transcript;
-                        document.getElementById('taskInput').value = transcript;
-                        this.showToast(`🎤 Heard: "${transcript}"`);
-                        setTimeout(() => this.addReminder(), 500);
-                    };
-
-                    this.recognition.onend = () => {
-                        this.isListening = false;
-                        document.getElementById('micBtn').classList.remove('listening');
-                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-                    };
-
-                    this.recognition.onerror = (event) => {
-                        console.error('Speech error:', event.error);
-                        this.isListening = false;
-                        document.getElementById('micBtn').classList.remove('listening');
-                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-                        
-                        if (event.error === 'not-allowed') {
-                            this.showToast('🎤 Microphone blocked! Enable in settings');
-                        } else {
-                            this.showToast('🎤 Try typing instead');
-                        }
-                    };
-                } else {
-                    document.getElementById('micBtn').style.display = 'none';
-                }
-            }
-
-            toggleVoice() {
-                if (!this.recognition) {
-                    this.showToast('🎤 Voice not supported');
-                    return;
-                }
-
-                if (this.isListening) {
-                    this.recognition.stop();
-                    this.isListening = false;
-                    document.getElementById('micBtn').classList.remove('listening');
-                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-                } else {
-                    this.recognition.start();
-                    this.isListening = true;
-                    document.getElementById('micBtn').classList.add('listening');
-                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
-                    this.showToast('🎤 Listening...');
-                }
+                // Unlock audio on first user interaction
+                document.addEventListener('click', () => {
+                    if (this.audio) {
+                        this.audio.load();
+                        console.log('Audio unlocked');
+                    }
+                }, { once: true });
             }
 
             parseTime(text) {
@@ -370,19 +138,16 @@
                 let target = new Date(now);
                 const lower = text.toLowerCase();
 
-                const inMatch = lower.match(/in\s+(\d+)\s*(min|minute|minutes|hour|hours|day|days)/);
+                const inMatch = lower.match(/in\s+(\d+)\s*(min|minute|minutes)/);
                 if (inMatch) {
                     const val = parseInt(inMatch[1]);
-                    const unit = inMatch[2];
-                    if (unit.startsWith('min')) target.setMinutes(target.getMinutes() + val);
-                    else if (unit.startsWith('hour')) target.setHours(target.getHours() + val);
-                    else if (unit.startsWith('day')) target.setDate(target.getDate() + val);
+                    target.setMinutes(target.getMinutes() + val);
                     return target;
                 }
 
                 if (lower.includes('tomorrow')) {
                     target.setDate(target.getDate() + 1);
-                    if (!lower.match(/\d+\s*(am|pm|:)/)) target.setHours(9, 0, 0, 0);
+                    target.setHours(9, 0, 0, 0);
                     return target;
                 }
 
@@ -391,30 +156,25 @@
                     let hours = parseInt(timeMatch[1]);
                     const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
                     const ampm = timeMatch[3];
-                    
                     if (ampm) {
                         if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
                         if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
                     }
                     target.setHours(hours, minutes, 0, 0);
-                    
                     if (target < now && !lower.includes('today')) {
                         target.setDate(target.getDate() + 1);
                     }
                     return target;
                 }
 
-                target.setHours(target.getHours() + 1);
+                target.setMinutes(target.getMinutes() + 60);
                 return target;
             }
 
             addReminder() {
                 const input = document.getElementById('taskInput');
                 const text = input.value.trim();
-                if (!text) {
-                    this.showToast('Please enter a reminder');
-                    return;
-                }
+                if (!text) { this.showToast('Please enter a reminder'); return; }
 
                 const scheduledTime = this.parseTime(text);
                 const reminder = {
@@ -428,78 +188,50 @@
                 this.reminders.push(reminder);
                 this.save();
                 this.render();
-                
                 input.value = '';
                 this.showToast(`✓ Set for ${scheduledTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
+                this.updateDebugInfo();
             }
 
             toggleComplete(id) {
                 const r = this.reminders.find(x => x.id === id);
-                if (r) {
-                    r.completed = !r.completed;
-                    this.save();
-                    this.render();
-                }
+                if (r) { r.completed = !r.completed; this.save(); this.render(); }
             }
 
             delete(id) {
                 this.reminders = this.reminders.filter(x => x.id !== id);
                 this.save();
                 this.render();
+                this.updateDebugInfo();
             }
 
-            save() {
-                localStorage.setItem('reminders', JSON.stringify(this.reminders));
-            }
+            save() { localStorage.setItem('reminders', JSON.stringify(this.reminders)); }
 
             render() {
                 const list = document.getElementById('reminderList');
-                const now = Date.now();
-                
-                this.reminders.sort((a, b) => {
-                    if (a.completed === b.completed) return a.time - b.time;
-                    return a.completed ? 1 : -1;
-                });
+                this.reminders.sort((a, b) => a.time - b.time);
 
                 document.getElementById('countPending').textContent = this.reminders.filter(r => !r.completed).length;
-                document.getElementById('countToday').textContent = this.reminders.filter(r => 
-                    !r.completed && new Date(r.time).toDateString() === new Date().toDateString()
-                ).length;
+                document.getElementById('countToday').textContent = this.reminders.filter(r => !r.completed && new Date(r.time).toDateString() === new Date().toDateString()).length;
                 document.getElementById('countDone').textContent = this.reminders.filter(r => r.completed).length;
 
                 if (this.reminders.length === 0) {
-                    list.innerHTML = `
-                        <div class="empty">
-                            <i class="fas fa-clipboard-list"></i>
-                            <p>No reminders yet.<br><br>💡 Try:<br>"Call mom in 10 mins"<br>"Meeting tomorrow at 3pm"</p>
-                        </div>
-                    `;
+                    list.innerHTML = '<div class="empty"><i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px;"></i><br>No reminders yet.</div>';
                     return;
                 }
 
                 list.innerHTML = this.reminders.map(r => {
                     const date = new Date(r.time);
-                    const isOverdue = !r.completed && r.time < now;
-                    const timeStr = date.toLocaleString([], { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                    
+                    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     return `
-                        <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
+                        <div class="reminder-item ${r.completed ? 'completed' : ''}">
                             <div class="r-info">
                                 <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
-                                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '• <span style="color:#ef4444">Overdue</span>' : ''}</p>
+                                <p><i class="far fa-clock"></i> ${timeStr}</p>
                             </div>
                             <div class="actions">
-                                <button class="btn-icon" onclick="app.toggleComplete(${r.id})">
-                                    <i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i>
-                                </button>
-                                <button class="btn-icon" onclick="app.delete(${r.id})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
+                                <button class="btn-icon" onclick="app.delete(${r.id})"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                     `;
@@ -507,146 +239,129 @@
             }
 
             startScheduler() {
+                // Check every 1 second for accuracy
                 setInterval(() => {
                     const now = Date.now();
+                    let triggered = false;
+                    
                     this.reminders.forEach(r => {
                         if (!r.completed && !r.notified && r.time <= now) {
                             this.triggerNotification(r);
                             r.notified = true;
-                            this.save();
-                            this.render();
+                            triggered = true;
                         }
                     });
-                }, 5000);
+                    
+                    if (triggered) {
+                        this.save();
+                        this.render();
+                    }
+                    this.updateDebugInfo();
+                }, 1000);
             }
 
-            async triggerNotification(r) {
-                // Browser notification
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    try {
-                        const notif = new Notification('⏰ Reminder!', {
-                            body: r.text,
-                            tag: r.id.toString(),
-                            requireInteraction: true,
-                            icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png'
-                        });
-                        
-                        // Play sound
-                        this.playSound();
-                        
-                        // Vibrate
-                        if ('vibrate' in navigator) {
-                            navigator.vibrate([300, 100, 300]);
-                        }
-                        
-                        notif.onclick = () => {
-                            window.focus();
-                            notif.close();
-                        };
-                    } catch (e) {
-                        console.error('Notification failed:', e);
-                    }
+            triggerNotification(r) {
+                console.log('🔔 Triggering notification:', r.text);
+                
+                // 1. Show Toast (always works)
+                this.showToast(`🔔 ${r.text}`);
+                
+                // 2. Vibrate (works on Android)
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([500, 200, 500, 200, 500]);
+                    console.log('Vibration triggered');
                 }
                 
-                this.showToast(`🔔 ${r.text}`);
+                // 3. Play Sound
+                this.playSound();
+                
+                // 4. Browser Notification
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    try {
+                        new Notification('⏰ Reminder!', {
+                            body: r.text,
+                            icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                            tag: r.id.toString()
+                        });
+                        console.log('Browser notification sent');
+                    } catch (e) {
+                        console.error('Notification error:', e);
+                    }
+                }
             }
 
             playSound() {
                 try {
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                    audio.volume = 1.0;
-                    audio.play().catch(() => this.beep());
+                    // Method 1: HTML5 Audio
+                    if (this.audio) {
+                        this.audio.currentTime = 0;
+                        this.audio.play().then(() => {
+                            console.log('Audio playing');
+                        }).catch(e => {
+                            console.log('Audio play failed:', e);
+                            this.playBeep();
+                        });
+                    } else {
+                        this.playBeep();
+                    }
                 } catch (e) {
-                    this.beep();
+                    this.playBeep();
                 }
             }
 
-            beep() {
+            playBeep() {
                 try {
-                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.frequency.value = 800;
-                    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-                    osc.start(ctx.currentTime);
-                    osc.stop(ctx.currentTime + 0.5);
-                } catch (e) {}
-            }
-
-            checkNotifStatus() {
-                if ('Notification' in window) {
-                    if (Notification.permission === 'granted') {
-                        document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
-                    } else if (Notification.permission === 'denied') {
-                        document.getElementById('permBanner').classList.add('show');
-                    } else {
-                        // Request permission
-                        setTimeout(() => this.requestNotifPermission(), 2000);
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const ctx = new AudioContext();
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.frequency.value = 800;
+                        osc.type = 'sine';
+                        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                        osc.start(ctx.currentTime);
+                        osc.stop(ctx.currentTime + 0.5);
+                        console.log('Beep played');
                     }
+                } catch (e) {
+                    console.error('Beep failed:', e);
                 }
             }
 
             async requestNotifPermission() {
-                if (!('Notification' in window)) {
-                    this.showToast('Notifications not supported');
-                    return;
-                }
-                
+                if (!('Notification' in window)) return;
                 if (Notification.permission === 'granted') {
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                     return;
                 }
-                
-                try {
-                    const permission = await Notification.requestPermission();
-                    if (permission === 'granted') {
-                        this.showToast('✓ Notifications enabled!');
-                        document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
-                        document.getElementById('permBanner').classList.remove('show');
-                        
-                        // Test notification
-                        new Notification('Smart Reminder', {
-                            body: 'You will get alerts when reminders are due!',
-                            icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png'
-                        });
-                    } else {
-                        document.getElementById('permBanner').classList.add('show');
-                    }
-                } catch (e) {
-                    console.error('Permission error:', e);
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    this.showToast('✓ Notifications enabled');
+                    document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                 }
-            }
-
-            openPermSettings() {
-                // Try to open Chrome settings
-                window.open('chrome://settings/content/notifications', '_blank');
-                this.showToast('Enable notifications for this site');
             }
 
             showToast(msg) {
                 const toast = document.getElementById('toast');
                 document.getElementById('toastMsg').textContent = msg;
                 toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 3000);
+                setTimeout(() => toast.classList.remove('show'), 4000);
             }
 
-            checkInstallPrompt() {
-                if (/Android/i.test(navigator.userAgent)) {
-                    document.getElementById('installHelp').classList.add('show');
+            updateDebugInfo() {
+                const now = new Date();
+                const nextReminder = this.reminders.filter(r => !r.completed && !r.notified).sort((a, b) => a.time - b.time)[0];
+                const debug = document.getElementById('debugInfo');
+                
+                if (nextReminder) {
+                    const timeLeft = Math.round((nextReminder.time - now.getTime()) / 1000);
+                    debug.innerHTML = `⏰ Next reminder in: <b>${timeLeft}s</b> | Scheduler: <b>Running</b>`;
+                } else {
+                    debug.innerHTML = `⏰ No pending reminders | Scheduler: <b>Running</b>`;
                 }
-                
-                window.addEventListener('beforeinstallprompt', (e) => {
-                    e.preventDefault();
-                    window.deferredPrompt = e;
-                });
-                
-                window.addEventListener('appinstalled', () => {
-                    document.getElementById('installHelp').classList.remove('show');
-                    this.showToast('✓ App installed!');
-                });
             }
         }
 
