@@ -18,6 +18,7 @@
         .input-group { background: #1e293b; padding: 8px; border-radius: 16px; display: flex; gap: 8px; border: 1px solid #334155; margin-bottom: 15px; }
         input { flex: 1; background: transparent; border: none; color: white; padding: 12px; font-size: 1rem; outline: none; }
         .action-btn { background: #6366f1; color: white; border: none; width: 45px; height: 45px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .action-btn.mic.listening { background: #ef4444; animation: pulse 1s infinite; }
         .date-widget { background: #1e293b; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .date-big { font-size: 2rem; font-weight: 700; color: #6366f1; }
         .date-day { color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; }
@@ -28,11 +29,9 @@
         .reminder-list { display: flex; flex-direction: column; gap: 10px; }
         .reminder-item { background: #1e293b; padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #6366f1; }
         .reminder-item.completed { border-left-color: #10b981; opacity: 0.7; }
-        .reminder-item.overdue { border-left-color: #ef4444; animation: pulse 2s infinite; }
-@keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-    50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-}
+        .reminder-item.overdue { border-left-color: #ef4444; animation: pulseOverdue 2s infinite; }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } }
+        @keyframes pulseOverdue { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
         .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
         .r-info p { font-size: 0.8rem; color: #94a3b8; }
         .actions { display: flex; gap: 6px; }
@@ -55,8 +54,6 @@
         </header>
 
         <div class="install-help show" id="installHelp">📱 <b>Install:</b> Tap ⋮ → "Add to Home screen"</div>
-        
-        <!-- Debug Info -->
         <div class="debug-info" id="debugInfo">Checking scheduler...</div>
 
         <div class="date-widget">
@@ -65,13 +62,13 @@
             <div style="color: #94a3b8; font-size: 0.9rem;" id="currentMonth">Feb 2026</div>
         </div>
 
-       <div class="input-group">
-    <button class="action-btn mic" id="micBtn" title="Tap to speak">
-        <i class="fas fa-microphone"></i>
-    </button>
-    <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Test in 1 minute'">
-    <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
-</div>
+        <div class="input-group">
+            <button class="action-btn mic" id="micBtn" title="Tap to speak">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Test in 1 minute'">
+            <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
+        </div>
         
         <div class="suggestions">
             <span class="suggestion-tag" data-text="Test reminder in 1 minute">⏱️ Test 1 min</span>
@@ -89,7 +86,6 @@
 
     <div id="toast" class="toast"><i class="fas fa-bell"></i><span id="toastMsg">Reminder</span></div>
 
-    <!-- Hidden Audio Element -->
     <audio id="notifSound" preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
@@ -99,6 +95,8 @@
             constructor() {
                 this.reminders = JSON.parse(localStorage.getItem('reminders')) || [];
                 this.audio = document.getElementById('notifSound');
+                this.isListening = false;
+                this.recognition = null;
                 this.init();
             }
 
@@ -108,6 +106,7 @@
                 this.setupEvents();
                 this.startScheduler();
                 this.requestNotifPermission();
+                this.initVoice();
                 this.updateDebugInfo();
             }
 
@@ -123,58 +122,8 @@
                 document.getElementById('taskInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.addReminder();
                 });
-                document.getElementById('notifBtn').addEventListener('click', () => this.initVoice() {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = false;
-        this.recognition.interimResults = false;
-        this.recognition.lang = 'en-US';
-
-        this.recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            document.getElementById('taskInput').value = transcript;
-            this.showToast(`🎤 Heard: "${transcript}"`);
-            setTimeout(() => this.addReminder(), 500);
-        };
-
-        this.recognition.onend = () => {
-            this.isListening = false;
-            document.getElementById('micBtn').classList.remove('listening');
-            document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-        };
-
-        this.recognition.onerror = (event) => {
-            this.isListening = false;
-            document.getElementById('micBtn').classList.remove('listening');
-            document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-            if (event.error === 'not-allowed') {
-                this.showToast('🎤 Microphone blocked! Enable in settings');
-            }
-        };
-    } else {
-        document.getElementById('micBtn').style.display = 'none';
-    }
-}
-
-toggleVoice() {
-    if (!this.recognition) {
-        this.showToast('🎤 Voice not supported');
-        return;
-    }
-    if (this.isListening) {
-        this.recognition.stop();
-        this.isListening = false;
-        document.getElementById('micBtn').classList.remove('listening');
-        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
-    } else {
-        this.recognition.start();
-        this.isListening = true;
-        document.getElementById('micBtn').classList.add('listening');
-        document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
-        this.showToast('🎤 Listening...');
-    }
-}requestNotifPermission());
+                document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
+                document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
                 
                 document.querySelectorAll('.suggestion-tag').forEach(tag => {
                     tag.addEventListener('click', () => {
@@ -183,13 +132,59 @@ toggleVoice() {
                     });
                 });
 
-                // Unlock audio on first user interaction
                 document.addEventListener('click', () => {
-                    if (this.audio) {
-                        this.audio.load();
-                        console.log('Audio unlocked');
-                    }
+                    if (this.audio) { this.audio.load(); }
                 }, { once: true });
+            }
+
+            initVoice() {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = false;
+                    this.recognition.lang = 'en-US';
+
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        document.getElementById('taskInput').value = transcript;
+                        this.showToast(`🎤 Heard: "${transcript}"`);
+                        setTimeout(() => this.addReminder(), 500);
+                    };
+
+                    this.recognition.onend = () => {
+                        this.isListening = false;
+                        document.getElementById('micBtn').classList.remove('listening');
+                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                    };
+
+                    this.recognition.onerror = (event) => {
+                        this.isListening = false;
+                        document.getElementById('micBtn').classList.remove('listening');
+                        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                        if (event.error === 'not-allowed') {
+                            this.showToast('🎤 Microphone blocked!');
+                        }
+                    };
+                } else {
+                    document.getElementById('micBtn').style.display = 'none';
+                }
+            }
+
+            toggleVoice() {
+                if (!this.recognition) { this.showToast('🎤 Voice not supported'); return; }
+                if (this.isListening) {
+                    this.recognition.stop();
+                    this.isListening = false;
+                    document.getElementById('micBtn').classList.remove('listening');
+                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+                } else {
+                    this.recognition.start();
+                    this.isListening = true;
+                    document.getElementById('micBtn').classList.add('listening');
+                    document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
+                    this.showToast('🎤 Listening...');
+                }
             }
 
             parseTime(text) {
@@ -199,8 +194,7 @@ toggleVoice() {
 
                 const inMatch = lower.match(/in\s+(\d+)\s*(min|minute|minutes)/);
                 if (inMatch) {
-                    const val = parseInt(inMatch[1]);
-                    target.setMinutes(target.getMinutes() + val);
+                    target.setMinutes(target.getMinutes() + parseInt(inMatch[1]));
                     return target;
                 }
 
@@ -268,6 +262,7 @@ toggleVoice() {
 
             render() {
                 const list = document.getElementById('reminderList');
+                const now = Date.now();
                 this.reminders.sort((a, b) => a.time - b.time);
 
                 document.getElementById('countPending').textContent = this.reminders.filter(r => !r.completed).length;
@@ -280,30 +275,28 @@ toggleVoice() {
                 }
 
                 list.innerHTML = this.reminders.map(r => {
-    const date = new Date(r.time);
-    const now = Date.now();
-    const isOverdue = !r.completed && r.time < now;
-    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    return `
-        <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
-            <div class="r-info">
-                <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
-                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}</p>
-            </div>
-            <div class="actions">
-                <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
-                <button class="btn-icon" onclick="app.delete(${r.id})"><i class="fas fa-trash"></i></button>
-            </div>
-        </div>
-    `;
-}).join('');
+                    const date = new Date(r.time);
+                    const isOverdue = !r.completed && r.time < now;
+                    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    return `
+                        <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
+                            <div class="r-info">
+                                <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
+                                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}</p>
+                            </div>
+                            <div class="actions">
+                                <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
+                                <button class="btn-icon" onclick="app.delete(${r.id})"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
 
             startScheduler() {
-                // Check every 1 second for accuracy
                 setInterval(() => {
                     const now = Date.now();
                     let triggered = false;
-                    
                     this.reminders.forEach(r => {
                         if (!r.completed && !r.notified && r.time <= now) {
                             this.triggerNotification(r);
@@ -311,31 +304,15 @@ toggleVoice() {
                             triggered = true;
                         }
                     });
-                    
-                    if (triggered) {
-                        this.save();
-                        this.render();
-                    }
+                    if (triggered) { this.save(); this.render(); }
                     this.updateDebugInfo();
                 }, 1000);
             }
 
             triggerNotification(r) {
-                console.log('🔔 Triggering notification:', r.text);
-                
-                // 1. Show Toast (always works)
                 this.showToast(`🔔 ${r.text}`);
-                
-                // 2. Vibrate (works on Android)
-                if ('vibrate' in navigator) {
-                    navigator.vibrate([500, 200, 500, 200, 500]);
-                    console.log('Vibration triggered');
-                }
-                
-                // 3. Play Sound
+                if ('vibrate' in navigator) { navigator.vibrate([500, 200, 500, 200, 500]); }
                 this.playSound();
-                
-                // 4. Browser Notification
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
                         new Notification('⏰ Reminder!', {
@@ -343,30 +320,17 @@ toggleVoice() {
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                             tag: r.id.toString()
                         });
-                        console.log('Browser notification sent');
-                    } catch (e) {
-                        console.error('Notification error:', e);
-                    }
+                    } catch (e) { console.error('Notification error:', e); }
                 }
             }
 
             playSound() {
                 try {
-                    // Method 1: HTML5 Audio
                     if (this.audio) {
                         this.audio.currentTime = 0;
-                        this.audio.play().then(() => {
-                            console.log('Audio playing');
-                        }).catch(e => {
-                            console.log('Audio play failed:', e);
-                            this.playBeep();
-                        });
-                    } else {
-                        this.playBeep();
-                    }
-                } catch (e) {
-                    this.playBeep();
-                }
+                        this.audio.play().catch(() => this.playBeep());
+                    } else { this.playBeep(); }
+                } catch (e) { this.playBeep(); }
             }
 
             playBeep() {
@@ -379,16 +343,12 @@ toggleVoice() {
                         osc.connect(gain);
                         gain.connect(ctx.destination);
                         osc.frequency.value = 800;
-                        osc.type = 'sine';
                         gain.gain.setValueAtTime(0.5, ctx.currentTime);
                         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
                         osc.start(ctx.currentTime);
                         osc.stop(ctx.currentTime + 0.5);
-                        console.log('Beep played');
                     }
-                } catch (e) {
-                    console.error('Beep failed:', e);
-                }
+                } catch (e) {}
             }
 
             async requestNotifPermission() {
@@ -415,7 +375,6 @@ toggleVoice() {
                 const now = new Date();
                 const nextReminder = this.reminders.filter(r => !r.completed && !r.notified).sort((a, b) => a.time - b.time)[0];
                 const debug = document.getElementById('debugInfo');
-                
                 if (nextReminder) {
                     const timeLeft = Math.round((nextReminder.time - now.getTime()) / 1000);
                     debug.innerHTML = `⏰ Next reminder in: <b>${timeLeft}s</b> | Scheduler: <b>Running</b>`;
@@ -429,4 +388,3 @@ toggleVoice() {
     </script>
 </body>
 </html>
-
