@@ -19,6 +19,7 @@
         input { flex: 1; background: transparent; border: none; color: white; padding: 12px; font-size: 1rem; outline: none; }
         .action-btn { background: #6366f1; color: white; border: none; width: 45px; height: 45px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
         .action-btn.mic.listening { background: #ef4444; animation: pulse 1s infinite; }
+        .action-btn.active { background: #ef4444; animation: pulse 1s infinite; }
         .date-widget { background: #1e293b; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .date-big { font-size: 2rem; font-weight: 700; color: #6366f1; }
         .date-day { color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; }
@@ -44,16 +45,28 @@
         .suggestions { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
         .suggestion-tag { background: #0f172a; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #334155; }
         .debug-info { background: #1e293b; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 0.8rem; color: #94a3b8; }
+        .alert-banner { background: #ef4444; padding: 12px; border-radius: 8px; margin: 15px 0; display: none; text-align: center; }
+        .alert-banner.show { display: block; }
+        .alert-banner button { background: white; color: #ef4444; border: none; padding: 6px 16px; border-radius: 6px; margin-left: 10px; font-weight: 600; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="logo"><i class="fas fa-bolt"></i><span>Smart Reminder</span></div>
-            <button class="action-btn" id="notifBtn"><i class="fas fa-bell"></i></button>
+            <div style="display: flex; gap: 8px;">
+                <button class="action-btn" id="repeatBtn" title="Toggle repeating alerts"><i class="fas fa-redo"></i></button>
+                <button class="action-btn" id="notifBtn"><i class="fas fa-bell"></i></button>
+            </div>
         </header>
 
         <div class="install-help show" id="installHelp">📱 <b>Install:</b> Tap ⋮ → "Add to Home screen"</div>
+        
+        <div class="alert-banner" id="alertBanner">
+            🔔 <b>Active Alerts!</b> Reminders are ringing every 5s
+            <button onclick="app.stopAllAlerts()">Stop</button>
+        </div>
+        
         <div class="debug-info" id="debugInfo">Checking scheduler...</div>
 
         <div class="date-widget">
@@ -86,7 +99,7 @@
 
     <div id="toast" class="toast"><i class="fas fa-bell"></i><span id="toastMsg">Reminder</span></div>
 
-    <audio id="notifSound" preload="auto">
+    <audio id="notifSound" preload="auto" loop>
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
 
@@ -97,6 +110,9 @@
                 this.audio = document.getElementById('notifSound');
                 this.isListening = false;
                 this.recognition = null;
+                this.isRepeating = true; // Default: repeat every 5s
+                this.alertInterval = null;
+                this.activeAlerts = [];
                 this.init();
             }
 
@@ -108,6 +124,31 @@
                 this.requestNotifPermission();
                 this.initVoice();
                 this.updateDebugInfo();
+                this.registerServiceWorker();
+            }
+
+            registerServiceWorker() {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('data:text/javascript,' + encodeURIComponent(`
+                        self.addEventListener('install', e => self.skipWaiting());
+                        self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+                        self.addEventListener('push', e => {
+                            const data = e.data ? e.data.json() : {};
+                            self.registration.showNotification(data.title || 'Reminder', {
+                                body: data.body || 'You have a reminder',
+                                icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                tag: data.tag,
+                                requireInteraction: true,
+                                vibrate: [500, 200, 500, 200, 500]
+                            });
+                        });
+                        self.addEventListener('notificationclick', e => {
+                            e.notification.close();
+                            clients.openWindow('/');
+                        });
+                    `)).catch(() => console.log('SW registered'));
+                }
             }
 
             updateDate() {
@@ -124,6 +165,7 @@
                 });
                 document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
                 document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
+                document.getElementById('repeatBtn').addEventListener('click', () => this.toggleRepeating());
                 
                 document.querySelectorAll('.suggestion-tag').forEach(tag => {
                     tag.addEventListener('click', () => {
@@ -187,6 +229,42 @@
                 }
             }
 
+            toggleRepeating() {
+                this.isRepeating = !this.isRepeating;
+                const btn = document.getElementById('repeatBtn');
+                if (this.isRepeating) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<i class="fas fa-redo"></i>';
+                    this.showToast('✓ Repeating alerts ON');
+                } else {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<i class="fas fa-redo-alt"></i>';
+                    this.showToast('⚠ Repeating alerts OFF');
+                }
+                this.updateDebugInfo();
+            }
+
+            stopAllAlerts() {
+                this.activeAlerts.forEach(id => {
+                    const r = this.reminders.find(x => x.id === id);
+                    if (r) r.notified = true;
+                });
+                this.activeAlerts = [];
+                if (this.alertInterval) {
+                    clearInterval(this.alertInterval);
+                    this.alertInterval = null;
+                }
+                if (this.audio) {
+                    this.audio.pause();
+                    this.audio.currentTime = 0;
+                }
+                document.getElementById('alertBanner').classList.remove('show');
+                document.getElementById('repeatBtn').classList.remove('active');
+                this.save();
+                this.render();
+                this.showToast('All alerts stopped');
+            }
+
             parseTime(text) {
                 const now = new Date();
                 let target = new Date(now);
@@ -248,11 +326,37 @@
 
             toggleComplete(id) {
                 const r = this.reminders.find(x => x.id === id);
-                if (r) { r.completed = !r.completed; this.save(); this.render(); }
+                if (r) {
+                    r.completed = true;
+                    r.notified = true;
+                    this.activeAlerts = this.activeAlerts.filter(aid => aid !== id);
+                    if (this.activeAlerts.length === 0 && this.alertInterval) {
+                        clearInterval(this.alertInterval);
+                        this.alertInterval = null;
+                        if (this.audio) {
+                            this.audio.pause();
+                            this.audio.currentTime = 0;
+                        }
+                        document.getElementById('alertBanner').classList.remove('show');
+                    }
+                    this.save();
+                    this.render();
+                    this.showToast('✓ Reminder completed');
+                }
             }
 
             delete(id) {
+                this.activeAlerts = this.activeAlerts.filter(aid => aid !== id);
                 this.reminders = this.reminders.filter(x => x.id !== id);
+                if (this.activeAlerts.length === 0 && this.alertInterval) {
+                    clearInterval(this.alertInterval);
+                    this.alertInterval = null;
+                    if (this.audio) {
+                        this.audio.pause();
+                        this.audio.currentTime = 0;
+                    }
+                    document.getElementById('alertBanner').classList.remove('show');
+                }
                 this.save();
                 this.render();
                 this.updateDebugInfo();
@@ -294,33 +398,74 @@
             }
 
             startScheduler() {
+                // Check every 1 second
                 setInterval(() => {
                     const now = Date.now();
-                    let triggered = false;
-                    this.reminders.forEach(r => {
-                        if (!r.completed && !r.notified && r.time <= now) {
-                            this.triggerNotification(r);
-                            r.notified = true;
-                            triggered = true;
+                    const overdueReminders = this.reminders.filter(r => 
+                        !r.completed && !r.notified && r.time <= now
+                    );
+
+                    if (overdueReminders.length > 0) {
+                        // Start repeating alerts
+                        if (!this.alertInterval) {
+                            this.activeAlerts = overdueReminders.map(r => r.id);
+                            document.getElementById('alertBanner').classList.add('show');
+                            
+                            // Trigger immediately
+                            overdueReminders.forEach(r => this.triggerNotification(r));
+                            
+                            // Repeat every 5 seconds
+                            if (this.isRepeating) {
+                                this.alertInterval = setInterval(() => {
+                                    const stillActive = this.reminders.filter(r => 
+                                        !r.completed && !r.notified && r.time <= now
+                                    );
+                                    if (stillActive.length > 0) {
+                                        stillActive.forEach(r => this.triggerNotification(r));
+                                    } else {
+                                        this.stopAllAlerts();
+                                    }
+                                }, 5000);
+                            }
                         }
-                    });
-                    if (triggered) { this.save(); this.render(); }
+                    }
+                    
                     this.updateDebugInfo();
                 }, 1000);
             }
 
             triggerNotification(r) {
+                // 1. Show Toast
                 this.showToast(`🔔 ${r.text}`);
-                if ('vibrate' in navigator) { navigator.vibrate([500, 200, 500, 200, 500]); }
+                
+                // 2. Vibrate
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([500, 200, 500, 200, 500]);
+                }
+                
+                // 3. Play Sound
                 this.playSound();
+                
+                // 4. Browser Notification
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
-                        new Notification('⏰ Reminder!', {
+                        const notif = new Notification('⏰ REMINDER!', {
                             body: r.text,
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                            tag: r.id.toString()
+                            badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                            tag: r.id.toString(),
+                            requireInteraction: true,
+                            vibrate: [500, 200, 500, 200, 500],
+                            silent: false
                         });
-                    } catch (e) { console.error('Notification error:', e); }
+                        
+                        notif.onclick = () => {
+                            window.focus();
+                            notif.close();
+                        };
+                    } catch (e) {
+                        console.error('Notification error:', e);
+                    }
                 }
             }
 
@@ -329,8 +474,12 @@
                     if (this.audio) {
                         this.audio.currentTime = 0;
                         this.audio.play().catch(() => this.playBeep());
-                    } else { this.playBeep(); }
-                } catch (e) { this.playBeep(); }
+                    } else {
+                        this.playBeep();
+                    }
+                } catch (e) {
+                    this.playBeep();
+                }
             }
 
             playBeep() {
@@ -361,6 +510,13 @@
                 if (permission === 'granted') {
                     this.showToast('✓ Notifications enabled');
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
+                    
+                    // Test notification
+                    new Notification('Smart Reminder', {
+                        body: 'You will get alerts every 5 seconds until completed!',
+                        icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                        vibrate: [200, 100, 200]
+                    });
                 }
             }
 
@@ -375,7 +531,11 @@
                 const now = new Date();
                 const nextReminder = this.reminders.filter(r => !r.completed && !r.notified).sort((a, b) => a.time - b.time)[0];
                 const debug = document.getElementById('debugInfo');
-                if (nextReminder) {
+                const activeCount = this.activeAlerts.length;
+                
+                if (activeCount > 0) {
+                    debug.innerHTML = `🚨 <b>${activeCount} Active Alert(s)</b> | Repeating: <b>${this.isRepeating ? 'Every 5s' : 'OFF'}</b>`;
+                } else if (nextReminder) {
                     const timeLeft = Math.round((nextReminder.time - now.getTime()) / 1000);
                     debug.innerHTML = `⏰ Next reminder in: <b>${timeLeft}s</b> | Scheduler: <b>Running</b>`;
                 } else {
