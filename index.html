@@ -28,6 +28,11 @@
         .reminder-list { display: flex; flex-direction: column; gap: 10px; }
         .reminder-item { background: #1e293b; padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #6366f1; }
         .reminder-item.completed { border-left-color: #10b981; opacity: 0.7; }
+        .reminder-item.overdue { border-left-color: #ef4444; animation: pulse 2s infinite; }
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
         .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
         .r-info p { font-size: 0.8rem; color: #94a3b8; }
         .actions { display: flex; gap: 6px; }
@@ -60,10 +65,13 @@
             <div style="color: #94a3b8; font-size: 0.9rem;" id="currentMonth">Feb 2026</div>
         </div>
 
-        <div class="input-group">
-            <input type="text" id="taskInput" placeholder="Type: 'Test in 1 minute'">
-            <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
-        </div>
+       <div class="input-group">
+    <button class="action-btn mic" id="micBtn" title="Tap to speak">
+        <i class="fas fa-microphone"></i>
+    </button>
+    <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Test in 1 minute'">
+    <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
+</div>
         
         <div class="suggestions">
             <span class="suggestion-tag" data-text="Test reminder in 1 minute">⏱️ Test 1 min</span>
@@ -115,7 +123,58 @@
                 document.getElementById('taskInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.addReminder();
                 });
-                document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
+                document.getElementById('notifBtn').addEventListener('click', () => this.initVoice() {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = false;
+        this.recognition.interimResults = false;
+        this.recognition.lang = 'en-US';
+
+        this.recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('taskInput').value = transcript;
+            this.showToast(`🎤 Heard: "${transcript}"`);
+            setTimeout(() => this.addReminder(), 500);
+        };
+
+        this.recognition.onend = () => {
+            this.isListening = false;
+            document.getElementById('micBtn').classList.remove('listening');
+            document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+        };
+
+        this.recognition.onerror = (event) => {
+            this.isListening = false;
+            document.getElementById('micBtn').classList.remove('listening');
+            document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+            if (event.error === 'not-allowed') {
+                this.showToast('🎤 Microphone blocked! Enable in settings');
+            }
+        };
+    } else {
+        document.getElementById('micBtn').style.display = 'none';
+    }
+}
+
+toggleVoice() {
+    if (!this.recognition) {
+        this.showToast('🎤 Voice not supported');
+        return;
+    }
+    if (this.isListening) {
+        this.recognition.stop();
+        this.isListening = false;
+        document.getElementById('micBtn').classList.remove('listening');
+        document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+    } else {
+        this.recognition.start();
+        this.isListening = true;
+        document.getElementById('micBtn').classList.add('listening');
+        document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
+        this.showToast('🎤 Listening...');
+    }
+}requestNotifPermission());
                 
                 document.querySelectorAll('.suggestion-tag').forEach(tag => {
                     tag.addEventListener('click', () => {
@@ -221,22 +280,23 @@
                 }
 
                 list.innerHTML = this.reminders.map(r => {
-                    const date = new Date(r.time);
-                    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    return `
-                        <div class="reminder-item ${r.completed ? 'completed' : ''}">
-                            <div class="r-info">
-                                <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
-                                <p><i class="far fa-clock"></i> ${timeStr}</p>
-                            </div>
-                            <div class="actions">
-                                <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
-                                <button class="btn-icon" onclick="app.delete(${r.id})"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
+    const date = new Date(r.time);
+    const now = Date.now();
+    const isOverdue = !r.completed && r.time < now;
+    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `
+        <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
+            <div class="r-info">
+                <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
+                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}</p>
+            </div>
+            <div class="actions">
+                <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
+                <button class="btn-icon" onclick="app.delete(${r.id})"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    `;
+}).join('');
 
             startScheduler() {
                 // Check every 1 second for accuracy
@@ -369,3 +429,4 @@
     </script>
 </body>
 </html>
+
