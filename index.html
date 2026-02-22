@@ -35,16 +35,6 @@
         @keyframes pulseOverdue { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
         .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
         .r-info p { font-size: 0.8rem; color: #94a3b8; }
-        .r-info .time-badge { 
-            display: inline-block; 
-            background: #6366f1; 
-            color: white; 
-            padding: 2px 8px; 
-            border-radius: 4px; 
-            font-size: 0.7rem; 
-            font-weight: 600; 
-            margin-left: 6px;
-        }
         .actions { display: flex; gap: 6px; }
         .btn-icon { background: #0f172a; border: none; color: #94a3b8; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; }
         .empty { text-align: center; padding: 40px; color: #94a3b8; }
@@ -52,8 +42,6 @@
         .toast.show { transform: translateX(-50%) translateY(0); }
         .install-help { background: #1e293b; padding: 15px; border-radius: 12px; margin: 15px 0; display: none; }
         .install-help.show { display: block; }
-        .suggestions { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
-        .suggestion-tag { background: #0f172a; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #334155; }
         .debug-info { background: #1e293b; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 0.85rem; color: #94a3b8; }
         .alert-banner { background: #ef4444; padding: 12px; border-radius: 8px; margin: 15px 0; display: none; text-align: center; }
         .alert-banner.show { display: block; }
@@ -89,15 +77,8 @@
             <button class="action-btn mic" id="micBtn" title="Tap to speak">
                 <i class="fas fa-microphone"></i>
             </button>
-            <input type="text" id="taskInput" placeholder="🎤 Say: 'Meeting tomorrow at 3pm' or 'Call mom on Monday 5:30pm'">
+            <input type="text" id="taskInput" placeholder="🎤 Say: 'Meeting tomorrow at 3pm'">
             <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
-        </div>
-        
-        <div class="suggestions">
-            <span class="suggestion-tag" data-text="Test reminder in 2 minutes">⏱️ Test 2 min</span>
-            <span class="suggestion-tag" data-text="Meeting tomorrow at 10am">📅 Tomorrow 10am</span>
-            <span class="suggestion-tag" data-text="Call mom on Monday at 5pm">📞 Monday 5pm</span>
-            <span class="suggestion-tag" data-text="Pay bills on 25th at 3pm">💰 25th 3pm</span>
         </div>
 
         <div class="stats">
@@ -111,7 +92,6 @@
 
     <div id="toast" class="toast"><i class="fas fa-bell"></i><span id="toastMsg">Reminder</span></div>
 
-    <!-- REMOVED loop attribute - sound plays once per trigger -->
     <audio id="notifSound" preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
@@ -180,13 +160,6 @@
                 document.getElementById('notifBtn').addEventListener('click', () => this.requestNotifPermission());
                 document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
                 document.getElementById('repeatBtn').addEventListener('click', () => this.toggleRepeating());
-                
-                document.querySelectorAll('.suggestion-tag').forEach(tag => {
-                    tag.addEventListener('click', () => {
-                        document.getElementById('taskInput').value = tag.dataset.text;
-                        this.addReminder();
-                    });
-                });
 
                 document.addEventListener('click', () => {
                     if (this.audio) { this.audio.load(); }
@@ -286,7 +259,6 @@
                 const lower = text.toLowerCase();
                 let timeSet = false;
 
-                // ===== 1. PARSE TIME =====
                 const timePatterns = [
                     /(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)/i,
                     /(\d{1,2}):(\d{2})/
@@ -310,7 +282,6 @@
                     }
                 }
 
-                // ===== 2. PARSE DAY OF WEEK =====
                 const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
                 for (let i = 0; i < days.length; i++) {
                     if (lower.includes(days[i])) {
@@ -324,7 +295,6 @@
                     }
                 }
 
-                // ===== 3. PARSE RELATIVE DATES =====
                 if (lower.includes('tomorrow')) {
                     target.setDate(target.getDate() + 1);
                     if (!timeSet) target.setHours(9, 0, 0, 0);
@@ -342,7 +312,6 @@
                     timeSet = true;
                 }
 
-                // ===== 4. PARSE SPECIFIC DATE =====
                 const datePatterns = [
                     /(\d{1,2})(?:st|nd|rd|th)/i,
                     /(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\s+(\d{1,2})/i,
@@ -377,7 +346,6 @@
                     }
                 }
 
-                // ===== 5. PARSE "IN X minutes/hours/days" =====
                 const inPatterns = [
                     { pattern: /in\s+(\d+)\s*(min|minute|minutes)/i, handler: (val) => target.setMinutes(target.getMinutes() + val) },
                     { pattern: /in\s+(\d+)\s*(hour|hours|hr|hrs)/i, handler: (val) => target.setHours(target.getHours() + val) },
@@ -393,12 +361,10 @@
                     }
                 }
 
-                // ===== 6. DEFAULT =====
                 if (!timeSet) {
                     target.setHours(target.getHours() + 1);
                 }
 
-                // ===== 7. FUTURE CHECK =====
                 if (target < now && !lower.includes('today')) {
                     target.setDate(target.getDate() + 1);
                 }
@@ -487,7 +453,7 @@
                 document.getElementById('countDone').textContent = this.reminders.filter(r => r.completed).length;
 
                 if (this.reminders.length === 0) {
-                    list.innerHTML = '<div class="empty"><i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px;"></i><br>No reminders yet.<br><br>💡 Try:<br>"Meeting tomorrow at 3pm"<br>"Call mom on Monday 5pm"<br>"Pay bills on 25th at 10am"</div>';
+                    list.innerHTML = '<div class="empty"><i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px;"></i><br>No reminders yet.</div>';
                     return;
                 }
 
@@ -495,7 +461,7 @@
                     const date = new Date(r.time);
                     const isOverdue = !r.completed && r.time < now;
                     
-                    // Format time with AM/PM badge
+                    // Format time with AM/PM
                     const timeStr = date.toLocaleString([], { 
                         weekday: 'short',
                         month: 'short', 
@@ -505,22 +471,13 @@
                         hour12: true
                     });
                     
-                    // Extract AM/PM for badge
-                    const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-                    const timeOnly = date.toLocaleString([], { 
-                        hour: 'numeric', 
-                        minute: '2-digit',
-                        hour12: false
-                    });
-                    
                     return `
                         <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
                             <div class="r-info">
                                 <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
                                 <p>
                                     <i class="far fa-clock"></i> ${timeStr}
-                                    <span class="time-badge">${timeOnly} ${ampm}</span>
-                                    ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}
+                                    ${isOverdue ? '<span style="color:#ef4444; margin-left:8px; font-weight:600">● Overdue</span>' : ''}
                                 </p>
                             </div>
                             <div class="actions">
@@ -540,7 +497,6 @@
                     );
 
                     if (overdueReminders.length > 0) {
-                        // Check if 5 seconds have passed since last alert
                         const timeSinceLastAlert = now - this.lastAlertTime;
                         
                         if (timeSinceLastAlert >= 5000 || this.lastAlertTime === 0) {
@@ -549,11 +505,9 @@
                                 document.getElementById('alertBanner').classList.add('show');
                             }
                             
-                            // Trigger alerts
                             overdueReminders.forEach(r => this.triggerNotification(r));
                             this.lastAlertTime = now;
                             
-                            // Set up repeating interval if enabled
                             if (this.isRepeating && !this.alertInterval) {
                                 this.alertInterval = setInterval(() => {
                                     const stillActive = this.reminders.filter(r => 
@@ -574,14 +528,18 @@
             }
 
             triggerNotification(r) {
+                // 1. Show Toast (works even when app is in background)
                 this.showToast(`🔔 ${r.text}`);
                 
+                // 2. Vibrate
                 if ('vibrate' in navigator) {
                     navigator.vibrate([500, 200, 500, 200, 500]);
                 }
                 
+                // 3. Play Sound
                 this.playSound();
                 
+                // 4. Browser Notification (works when app is closed)
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
                         const notif = new Notification('⏰ REMINDER!', {
