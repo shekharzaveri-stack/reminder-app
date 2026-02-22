@@ -35,6 +35,16 @@
         @keyframes pulseOverdue { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
         .r-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
         .r-info p { font-size: 0.8rem; color: #94a3b8; }
+        .r-info .time-badge { 
+            display: inline-block; 
+            background: #6366f1; 
+            color: white; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            font-size: 0.7rem; 
+            font-weight: 600; 
+            margin-left: 6px;
+        }
         .actions { display: flex; gap: 6px; }
         .btn-icon { background: #0f172a; border: none; color: #94a3b8; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; }
         .empty { text-align: center; padding: 40px; color: #94a3b8; }
@@ -101,7 +111,8 @@
 
     <div id="toast" class="toast"><i class="fas fa-bell"></i><span id="toastMsg">Reminder</span></div>
 
-    <audio id="notifSound" preload="auto" loop>
+    <!-- REMOVED loop attribute - sound plays once per trigger -->
+    <audio id="notifSound" preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
 
@@ -115,6 +126,7 @@
                 this.isRepeating = true;
                 this.alertInterval = null;
                 this.activeAlerts = [];
+                this.lastAlertTime = 0;
                 this.init();
             }
 
@@ -237,11 +249,11 @@
                 if (this.isRepeating) {
                     btn.classList.remove('active');
                     btn.innerHTML = '<i class="fas fa-redo"></i>';
-                    this.showToast('✓ Repeating alerts ON');
+                    this.showToast('✓ Repeating alerts ON (every 5s)');
                 } else {
                     btn.classList.add('active');
                     btn.innerHTML = '<i class="fas fa-redo-alt"></i>';
-                    this.showToast('⚠ Repeating alerts OFF');
+                    this.showToast('⚠ Repeating alerts OFF (one-time alert)');
                 }
                 this.updateDebugInfo();
             }
@@ -262,25 +274,21 @@
                 }
                 document.getElementById('alertBanner').classList.remove('show');
                 document.getElementById('repeatBtn').classList.remove('active');
+                this.lastAlertTime = 0;
                 this.save();
                 this.render();
                 this.showToast('All alerts stopped');
             }
 
-            // ⭐ ENHANCED PARSER - Understands Day, Date, Time
             parseTime(text) {
                 const now = new Date();
                 let target = new Date(now);
                 const lower = text.toLowerCase();
-                
-                // Reset time to current if no specific time mentioned
                 let timeSet = false;
 
-                // ===== 1. PARSE TIME (3pm, 15:00, 3:30pm, etc.) =====
+                // ===== 1. PARSE TIME =====
                 const timePatterns = [
-                    // "3pm", "3 pm", "3:00pm", "3:00 pm"
                     /(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)/i,
-                    // "15:00", "15:30"
                     /(\d{1,2}):(\d{2})/
                 ];
 
@@ -292,13 +300,8 @@
                         const ampm = match[3];
 
                         if (ampm) {
-                            // 12-hour format
                             if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
                             if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
-                        }
-                        // If no ampm and hours > 12, assume 24-hour format
-                        else if (hours > 12) {
-                            // Already 24-hour format
                         }
 
                         target.setHours(hours, minutes, 0, 0);
@@ -307,16 +310,13 @@
                     }
                 }
 
-                // ===== 2. PARSE DAY OF WEEK (Monday, Tuesday, etc.) =====
+                // ===== 2. PARSE DAY OF WEEK =====
                 const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
                 for (let i = 0; i < days.length; i++) {
                     if (lower.includes(days[i])) {
                         const currentDay = target.getDay();
                         let daysUntil = i - currentDay;
-                        
-                        // If today is same day, assume next week
                         if (daysUntil <= 0) daysUntil += 7;
-                        
                         target.setDate(target.getDate() + daysUntil);
                         if (!timeSet) target.setHours(9, 0, 0, 0);
                         timeSet = true;
@@ -325,42 +325,27 @@
                 }
 
                 // ===== 3. PARSE RELATIVE DATES =====
-                
-                // "tomorrow"
                 if (lower.includes('tomorrow')) {
                     target.setDate(target.getDate() + 1);
                     if (!timeSet) target.setHours(9, 0, 0, 0);
                     timeSet = true;
                 }
                 
-                // "today"
                 if (lower.includes('today')) {
-                    // Keep same day
                     if (!timeSet) target.setHours(9, 0, 0, 0);
                     timeSet = true;
                 }
                 
-                // "next week"
                 if (lower.includes('next week')) {
                     target.setDate(target.getDate() + 7);
                     if (!timeSet) target.setHours(9, 0, 0, 0);
                     timeSet = true;
                 }
-                
-                // "next month"
-                if (lower.includes('next month')) {
-                    target.setMonth(target.getMonth() + 1);
-                    if (!timeSet) target.setHours(9, 0, 0, 0);
-                    timeSet = true;
-                }
 
-                // ===== 4. PARSE SPECIFIC DATE (25th, January 25, 25 January) =====
+                // ===== 4. PARSE SPECIFIC DATE =====
                 const datePatterns = [
-                    // "25th", "1st", "2nd", "3rd"
                     /(\d{1,2})(?:st|nd|rd|th)/i,
-                    // "January 25", "Jan 25"
                     /(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\s+(\d{1,2})/i,
-                    // "25 January", "25 Jan"
                     /(\d{1,2})\s+(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)/i
                 ];
 
@@ -370,7 +355,6 @@
                         let day = parseInt(match[1]);
                         if (match[2]) day = parseInt(match[2]);
                         
-                        // Try to find month
                         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
                         const fullMonths = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
                         
@@ -383,7 +367,6 @@
                         
                         target.setDate(day);
                         
-                        // If date already passed this month, assume next month
                         if (target < now && !lower.includes('today')) {
                             target.setMonth(target.getMonth() + 1);
                         }
@@ -410,12 +393,12 @@
                     }
                 }
 
-                // ===== 6. DEFAULT: If no time/date specified, default to 1 hour from now =====
+                // ===== 6. DEFAULT =====
                 if (!timeSet) {
                     target.setHours(target.getHours() + 1);
                 }
 
-                // ===== 7. FUTURE CHECK: If scheduled time is in the past, move to next day =====
+                // ===== 7. FUTURE CHECK =====
                 if (target < now && !lower.includes('today')) {
                     target.setDate(target.getDate() + 1);
                 }
@@ -447,7 +430,8 @@
                     month: 'short', 
                     day: 'numeric',
                     hour: '2-digit', 
-                    minute: '2-digit'
+                    minute: '2-digit',
+                    hour12: true
                 });
                 this.showToast(`✓ Set for ${timeStr}`);
                 this.updateDebugInfo();
@@ -510,18 +494,34 @@
                 list.innerHTML = this.reminders.map(r => {
                     const date = new Date(r.time);
                     const isOverdue = !r.completed && r.time < now;
+                    
+                    // Format time with AM/PM badge
                     const timeStr = date.toLocaleString([], { 
                         weekday: 'short',
                         month: 'short', 
                         day: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                        hour: 'numeric', 
+                        minute: '2-digit',
+                        hour12: true
                     });
+                    
+                    // Extract AM/PM for badge
+                    const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+                    const timeOnly = date.toLocaleString([], { 
+                        hour: 'numeric', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                    
                     return `
                         <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
                             <div class="r-info">
                                 <h4 style="${r.completed ? 'text-decoration: line-through' : ''}">${r.text}</h4>
-                                <p><i class="far fa-clock"></i> ${timeStr} ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}</p>
+                                <p>
+                                    <i class="far fa-clock"></i> ${timeStr}
+                                    <span class="time-badge">${timeOnly} ${ampm}</span>
+                                    ${isOverdue ? '<span style="color:#ef4444; margin-left:8px">● Overdue</span>' : ''}
+                                </p>
                             </div>
                             <div class="actions">
                                 <button class="btn-icon" onclick="app.toggleComplete(${r.id})"><i class="fas ${r.completed ? 'fa-undo' : 'fa-check'}"></i></button>
@@ -540,13 +540,21 @@
                     );
 
                     if (overdueReminders.length > 0) {
-                        if (!this.alertInterval) {
-                            this.activeAlerts = overdueReminders.map(r => r.id);
-                            document.getElementById('alertBanner').classList.add('show');
+                        // Check if 5 seconds have passed since last alert
+                        const timeSinceLastAlert = now - this.lastAlertTime;
+                        
+                        if (timeSinceLastAlert >= 5000 || this.lastAlertTime === 0) {
+                            if (!this.alertInterval) {
+                                this.activeAlerts = overdueReminders.map(r => r.id);
+                                document.getElementById('alertBanner').classList.add('show');
+                            }
                             
+                            // Trigger alerts
                             overdueReminders.forEach(r => this.triggerNotification(r));
+                            this.lastAlertTime = now;
                             
-                            if (this.isRepeating) {
+                            // Set up repeating interval if enabled
+                            if (this.isRepeating && !this.alertInterval) {
                                 this.alertInterval = setInterval(() => {
                                     const stillActive = this.reminders.filter(r => 
                                         !r.completed && !r.notified && r.time <= now
@@ -599,6 +607,7 @@
             playSound() {
                 try {
                     if (this.audio) {
+                        this.audio.pause();
                         this.audio.currentTime = 0;
                         this.audio.play().catch(() => this.playBeep());
                     } else {
@@ -653,7 +662,6 @@
                 setTimeout(() => toast.classList.remove('show'), 4000);
             }
 
-            // ⭐ IMPROVED: Shows Hours, Minutes, Seconds countdown
             updateDebugInfo() {
                 const now = new Date();
                 const nextReminder = this.reminders.filter(r => !r.completed && !r.notified).sort((a, b) => a.time - b.time)[0];
@@ -670,7 +678,6 @@
                         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                         const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
                         
-                        // Format with leading zeros
                         const hStr = hours.toString().padStart(2, '0');
                         const mStr = minutes.toString().padStart(2, '0');
                         const sStr = seconds.toString().padStart(2, '0');
