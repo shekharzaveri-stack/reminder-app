@@ -44,7 +44,7 @@
         .install-help.show { display: block; }
         .suggestions { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
         .suggestion-tag { background: #0f172a; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #334155; }
-        .debug-info { background: #1e293b; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 0.8rem; color: #94a3b8; }
+        .debug-info { background: #1e293b; padding: 10px; border-radius: 8px; margin: 15px 0; font-size: 0.85rem; color: #94a3b8; }
         .alert-banner { background: #ef4444; padding: 12px; border-radius: 8px; margin: 15px 0; display: none; text-align: center; }
         .alert-banner.show { display: block; }
         .alert-banner button { background: white; color: #ef4444; border: none; padding: 6px 16px; border-radius: 6px; margin-left: 10px; font-weight: 600; cursor: pointer; }
@@ -67,7 +67,7 @@
             <button onclick="app.stopAllAlerts()">Stop</button>
         </div>
         
-        <div class="debug-info" id="debugInfo">Checking scheduler...</div>
+        <div class="debug-info" id="debugInfo">⏰ Scheduler: Running</div>
 
         <div class="date-widget">
             <div class="date-day" id="currentDay">Friday</div>
@@ -79,13 +79,15 @@
             <button class="action-btn mic" id="micBtn" title="Tap to speak">
                 <i class="fas fa-microphone"></i>
             </button>
-            <input type="text" id="taskInput" placeholder="Type or tap 🎤: 'Test in 1 minute'">
+            <input type="text" id="taskInput" placeholder="🎤 Say: 'Meeting tomorrow at 3pm' or 'Call mom on Monday 5:30pm'">
             <button class="action-btn" id="addBtn"><i class="fas fa-plus"></i></button>
         </div>
         
         <div class="suggestions">
-            <span class="suggestion-tag" data-text="Test reminder in 1 minute">⏱️ Test 1 min</span>
-            <span class="suggestion-tag" data-text="Meeting tomorrow at 3pm">📅 Meeting</span>
+            <span class="suggestion-tag" data-text="Test reminder in 2 minutes">⏱️ Test 2 min</span>
+            <span class="suggestion-tag" data-text="Meeting tomorrow at 10am">📅 Tomorrow 10am</span>
+            <span class="suggestion-tag" data-text="Call mom on Monday at 5pm">📞 Monday 5pm</span>
+            <span class="suggestion-tag" data-text="Pay bills on 25th at 3pm">💰 25th 3pm</span>
         </div>
 
         <div class="stats">
@@ -110,7 +112,7 @@
                 this.audio = document.getElementById('notifSound');
                 this.isListening = false;
                 this.recognition = null;
-                this.isRepeating = true; // Default: repeat every 5s
+                this.isRepeating = true;
                 this.alertInterval = null;
                 this.activeAlerts = [];
                 this.init();
@@ -265,40 +267,159 @@
                 this.showToast('All alerts stopped');
             }
 
+            // ⭐ ENHANCED PARSER - Understands Day, Date, Time
             parseTime(text) {
                 const now = new Date();
                 let target = new Date(now);
                 const lower = text.toLowerCase();
+                
+                // Reset time to current if no specific time mentioned
+                let timeSet = false;
 
-                const inMatch = lower.match(/in\s+(\d+)\s*(min|minute|minutes)/);
-                if (inMatch) {
-                    target.setMinutes(target.getMinutes() + parseInt(inMatch[1]));
-                    return target;
+                // ===== 1. PARSE TIME (3pm, 15:00, 3:30pm, etc.) =====
+                const timePatterns = [
+                    // "3pm", "3 pm", "3:00pm", "3:00 pm"
+                    /(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)/i,
+                    // "15:00", "15:30"
+                    /(\d{1,2}):(\d{2})/
+                ];
+
+                for (const pattern of timePatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        let hours = parseInt(match[1]);
+                        const minutes = match[2] ? parseInt(match[2]) : 0;
+                        const ampm = match[3];
+
+                        if (ampm) {
+                            // 12-hour format
+                            if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+                            if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+                        }
+                        // If no ampm and hours > 12, assume 24-hour format
+                        else if (hours > 12) {
+                            // Already 24-hour format
+                        }
+
+                        target.setHours(hours, minutes, 0, 0);
+                        timeSet = true;
+                        break;
+                    }
                 }
 
+                // ===== 2. PARSE DAY OF WEEK (Monday, Tuesday, etc.) =====
+                const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                for (let i = 0; i < days.length; i++) {
+                    if (lower.includes(days[i])) {
+                        const currentDay = target.getDay();
+                        let daysUntil = i - currentDay;
+                        
+                        // If today is same day, assume next week
+                        if (daysUntil <= 0) daysUntil += 7;
+                        
+                        target.setDate(target.getDate() + daysUntil);
+                        if (!timeSet) target.setHours(9, 0, 0, 0);
+                        timeSet = true;
+                        break;
+                    }
+                }
+
+                // ===== 3. PARSE RELATIVE DATES =====
+                
+                // "tomorrow"
                 if (lower.includes('tomorrow')) {
                     target.setDate(target.getDate() + 1);
-                    target.setHours(9, 0, 0, 0);
-                    return target;
+                    if (!timeSet) target.setHours(9, 0, 0, 0);
+                    timeSet = true;
+                }
+                
+                // "today"
+                if (lower.includes('today')) {
+                    // Keep same day
+                    if (!timeSet) target.setHours(9, 0, 0, 0);
+                    timeSet = true;
+                }
+                
+                // "next week"
+                if (lower.includes('next week')) {
+                    target.setDate(target.getDate() + 7);
+                    if (!timeSet) target.setHours(9, 0, 0, 0);
+                    timeSet = true;
+                }
+                
+                // "next month"
+                if (lower.includes('next month')) {
+                    target.setMonth(target.getMonth() + 1);
+                    if (!timeSet) target.setHours(9, 0, 0, 0);
+                    timeSet = true;
                 }
 
-                const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-                if (timeMatch) {
-                    let hours = parseInt(timeMatch[1]);
-                    const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-                    const ampm = timeMatch[3];
-                    if (ampm) {
-                        if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
-                        if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+                // ===== 4. PARSE SPECIFIC DATE (25th, January 25, 25 January) =====
+                const datePatterns = [
+                    // "25th", "1st", "2nd", "3rd"
+                    /(\d{1,2})(?:st|nd|rd|th)/i,
+                    // "January 25", "Jan 25"
+                    /(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\s+(\d{1,2})/i,
+                    // "25 January", "25 Jan"
+                    /(\d{1,2})\s+(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)/i
+                ];
+
+                for (const pattern of datePatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        let day = parseInt(match[1]);
+                        if (match[2]) day = parseInt(match[2]);
+                        
+                        // Try to find month
+                        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                        const fullMonths = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+                        
+                        for (let i = 0; i < 12; i++) {
+                            if (lower.includes(months[i]) || lower.includes(fullMonths[i])) {
+                                target.setMonth(i);
+                                break;
+                            }
+                        }
+                        
+                        target.setDate(day);
+                        
+                        // If date already passed this month, assume next month
+                        if (target < now && !lower.includes('today')) {
+                            target.setMonth(target.getMonth() + 1);
+                        }
+                        
+                        if (!timeSet) target.setHours(9, 0, 0, 0);
+                        timeSet = true;
+                        break;
                     }
-                    target.setHours(hours, minutes, 0, 0);
-                    if (target < now && !lower.includes('today')) {
-                        target.setDate(target.getDate() + 1);
-                    }
-                    return target;
                 }
 
-                target.setMinutes(target.getMinutes() + 60);
+                // ===== 5. PARSE "IN X minutes/hours/days" =====
+                const inPatterns = [
+                    { pattern: /in\s+(\d+)\s*(min|minute|minutes)/i, handler: (val) => target.setMinutes(target.getMinutes() + val) },
+                    { pattern: /in\s+(\d+)\s*(hour|hours|hr|hrs)/i, handler: (val) => target.setHours(target.getHours() + val) },
+                    { pattern: /in\s+(\d+)\s*(day|days)/i, handler: (val) => target.setDate(target.getDate() + val) }
+                ];
+
+                for (const { pattern, handler } of inPatterns) {
+                    const match = lower.match(pattern);
+                    if (match) {
+                        handler(parseInt(match[1]));
+                        timeSet = true;
+                        break;
+                    }
+                }
+
+                // ===== 6. DEFAULT: If no time/date specified, default to 1 hour from now =====
+                if (!timeSet) {
+                    target.setHours(target.getHours() + 1);
+                }
+
+                // ===== 7. FUTURE CHECK: If scheduled time is in the past, move to next day =====
+                if (target < now && !lower.includes('today')) {
+                    target.setDate(target.getDate() + 1);
+                }
+
                 return target;
             }
 
@@ -320,7 +441,15 @@
                 this.save();
                 this.render();
                 input.value = '';
-                this.showToast(`✓ Set for ${scheduledTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
+                
+                const timeStr = scheduledTime.toLocaleString([], { 
+                    weekday: 'short',
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit', 
+                    minute: '2-digit'
+                });
+                this.showToast(`✓ Set for ${timeStr}`);
                 this.updateDebugInfo();
             }
 
@@ -374,14 +503,20 @@
                 document.getElementById('countDone').textContent = this.reminders.filter(r => r.completed).length;
 
                 if (this.reminders.length === 0) {
-                    list.innerHTML = '<div class="empty"><i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px;"></i><br>No reminders yet.</div>';
+                    list.innerHTML = '<div class="empty"><i class="fas fa-clipboard-list" style="font-size: 2rem; margin-bottom: 10px;"></i><br>No reminders yet.<br><br>💡 Try:<br>"Meeting tomorrow at 3pm"<br>"Call mom on Monday 5pm"<br>"Pay bills on 25th at 10am"</div>';
                     return;
                 }
 
                 list.innerHTML = this.reminders.map(r => {
                     const date = new Date(r.time);
                     const isOverdue = !r.completed && r.time < now;
-                    const timeStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const timeStr = date.toLocaleString([], { 
+                        weekday: 'short',
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
                     return `
                         <div class="reminder-item ${r.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}">
                             <div class="r-info">
@@ -398,7 +533,6 @@
             }
 
             startScheduler() {
-                // Check every 1 second
                 setInterval(() => {
                     const now = Date.now();
                     const overdueReminders = this.reminders.filter(r => 
@@ -406,15 +540,12 @@
                     );
 
                     if (overdueReminders.length > 0) {
-                        // Start repeating alerts
                         if (!this.alertInterval) {
                             this.activeAlerts = overdueReminders.map(r => r.id);
                             document.getElementById('alertBanner').classList.add('show');
                             
-                            // Trigger immediately
                             overdueReminders.forEach(r => this.triggerNotification(r));
                             
-                            // Repeat every 5 seconds
                             if (this.isRepeating) {
                                 this.alertInterval = setInterval(() => {
                                     const stillActive = this.reminders.filter(r => 
@@ -435,18 +566,14 @@
             }
 
             triggerNotification(r) {
-                // 1. Show Toast
                 this.showToast(`🔔 ${r.text}`);
                 
-                // 2. Vibrate
                 if ('vibrate' in navigator) {
                     navigator.vibrate([500, 200, 500, 200, 500]);
                 }
                 
-                // 3. Play Sound
                 this.playSound();
                 
-                // 4. Browser Notification
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
                         const notif = new Notification('⏰ REMINDER!', {
@@ -511,7 +638,6 @@
                     this.showToast('✓ Notifications enabled');
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                     
-                    // Test notification
                     new Notification('Smart Reminder', {
                         body: 'You will get alerts every 5 seconds until completed!',
                         icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
@@ -527,6 +653,7 @@
                 setTimeout(() => toast.classList.remove('show'), 4000);
             }
 
+            // ⭐ IMPROVED: Shows Hours, Minutes, Seconds countdown
             updateDebugInfo() {
                 const now = new Date();
                 const nextReminder = this.reminders.filter(r => !r.completed && !r.notified).sort((a, b) => a.time - b.time)[0];
@@ -536,10 +663,24 @@
                 if (activeCount > 0) {
                     debug.innerHTML = `🚨 <b>${activeCount} Active Alert(s)</b> | Repeating: <b>${this.isRepeating ? 'Every 5s' : 'OFF'}</b>`;
                 } else if (nextReminder) {
-                    const timeLeft = Math.round((nextReminder.time - now.getTime()) / 1000);
-                    debug.innerHTML = `⏰ Next reminder in: <b>${timeLeft}s</b> | Scheduler: <b>Running</b>`;
+                    const timeLeft = nextReminder.time - now.getTime();
+                    
+                    if (timeLeft > 0) {
+                        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+                        
+                        // Format with leading zeros
+                        const hStr = hours.toString().padStart(2, '0');
+                        const mStr = minutes.toString().padStart(2, '0');
+                        const sStr = seconds.toString().padStart(2, '0');
+                        
+                        debug.innerHTML = `⏰ Next reminder in: <b style="color:#6366f1">${hStr}h ${mStr}m ${sStr}s</b>`;
+                    } else {
+                        debug.innerHTML = `⏰ Reminder due now!`;
+                    }
                 } else {
-                    debug.innerHTML = `⏰ No pending reminders | Scheduler: <b>Running</b>`;
+                    debug.innerHTML = `⏰ No pending reminders | Scheduler: <b style="color:#10b981">Running</b>`;
                 }
             }
         }
