@@ -97,69 +97,47 @@
     </audio>
 
     <script>
-        // ⭐ ENHANCED SERVICE WORKER FOR BACKGROUND NOTIFICATIONS
+        // ⭐ MAXIMUM NOTIFICATION SUPPORT
         if ('serviceWorker' in navigator) {
-            // Create inline service worker blob
             const swCode = `
-                const REMINDERS_KEY = 'reminder_alerts';
+                self.addEventListener('install', e => self.skipWaiting());
+                self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
                 
-                self.addEventListener('install', event => {
-                    self.skipWaiting();
-                });
-                
-                self.addEventListener('activate', event => {
-                    event.waitUntil(self.clients.claim());
-                });
-                
-                // Listen for messages from main app
                 self.addEventListener('message', event => {
-                    if (event.data && event.data.type === 'SCHEDULE_NOTIFICATION') {
+                    if (event.data && event.data.type === 'TRIGGER_NOTIFICATION') {
                         const { reminder } = event.data;
-                        const triggerTime = new Date(reminder.time);
-                        const now = new Date();
                         
-                        // Schedule notification using setTimeout (works while SW is active)
-                        const delay = triggerTime - now;
-                        if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
-                            setTimeout(() => {
-                                self.registration.showNotification('⏰ REMINDER!', {
-                                    body: reminder.text,
-                                    icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                    badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                    tag: reminder.id.toString(),
-                                    requireInteraction: true,
-                                    vibrate: [500, 200, 500, 200, 500],
-                                    silent: false,
-                                    data: { reminderId: reminder.id }
-                                });
-                            }, delay);
-                        }
-                    }
-                    
-                    if (event.data && event.data.type === 'TRIGGER_NOW') {
-                        const { reminder } = event.data;
+                        // Show notification with maximum visibility
                         self.registration.showNotification('⏰ REMINDER!', {
                             body: reminder.text,
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                             badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                            tag: reminder.id.toString(),
+                            tag: 'reminder-' + reminder.id,
                             requireInteraction: true,
                             vibrate: [500, 200, 500, 200, 500],
                             silent: false,
-                            data: { reminderId: reminder.id }
+                            priority: 'max',
+                            urgency: 'high',
+                            renotify: true,
+                            actions: [
+                                { action: 'dismiss', title: 'Dismiss' },
+                                { action: 'snooze', title: 'Snooze 5min' }
+                            ]
                         });
                     }
                 });
                 
                 self.addEventListener('notificationclick', event => {
                     event.notification.close();
-                    event.waitUntil(clients.openWindow('/'));
+                    if (event.action === 'dismiss') {
+                        // Dismissed
+                    } else {
+                        event.waitUntil(clients.openWindow('/'));
+                    }
                 });
                 
-                // Keep service worker alive with periodic ping
-                setInterval(() => {
-                    // This helps keep SW active in background
-                }, 20000);
+                // Keep SW alive
+                setInterval(() => {}, 25000);
             `;
             
             const blob = new Blob([swCode], { type: 'text/javascript' });
@@ -167,17 +145,10 @@
             
             navigator.serviceWorker.register(swUrl)
                 .then(reg => {
-                    console.log('Service Worker registered:', reg.scope);
+                    console.log('SW registered');
                     window.swRegistration = reg;
-                    
-                    // Request periodic background sync (if supported)
-                    if ('periodicSync' in reg) {
-                        reg.periodicSync.register('reminder-check', {
-                            minInterval: 15 * 60 * 1000 // 15 minutes
-                        }).catch(() => {});
-                    }
                 })
-                .catch(err => console.log('SW registration failed:', err));
+                .catch(err => console.log('SW failed:', err));
         }
 
         class ReminderApp {
@@ -201,21 +172,6 @@
                 this.requestNotifPermission();
                 this.initVoice();
                 this.updateDebugInfo();
-                this.scheduleAllNotifications();
-            }
-
-            scheduleAllNotifications() {
-                // Schedule notifications for all pending reminders via Service Worker
-                if (window.swRegistration && window.swRegistration.active) {
-                    this.reminders.forEach(r => {
-                        if (!r.completed && !r.notified) {
-                            window.swRegistration.active.postMessage({
-                                type: 'SCHEDULE_NOTIFICATION',
-                                reminder: r
-                            });
-                        }
-                    });
-                }
             }
 
             updateDate() {
@@ -237,23 +193,6 @@
                 document.addEventListener('click', () => {
                     if (this.audio) { this.audio.load(); }
                 }, { once: true });
-
-                // Listen for notification clicks from Service Worker
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.addEventListener('message', event => {
-                        if (event.data && event.data.type === 'NOTIFICATION_CLICKED') {
-                            this.openReminder(event.data.reminderId);
-                        }
-                    });
-                }
-            }
-
-            openReminder(id) {
-                window.focus();
-                const r = this.reminders.find(x => x.id === id);
-                if (r) {
-                    this.showToast(`📌 ${r.text}`);
-                }
             }
 
             initVoice() {
@@ -479,7 +418,6 @@
                 this.reminders.push(reminder);
                 this.save();
                 this.render();
-                this.scheduleAllNotifications();
                 input.value = '';
                 
                 const timeStr = scheduledTime.toLocaleString([], { 
@@ -617,8 +555,11 @@
                 }, 1000);
             }
 
+            // ⭐ ENHANCED NOTIFICATION - Multiple attempts for maximum visibility
             triggerNotification(r) {
-                // 1. Show Toast
+                console.log('🔔 Triggering notification:', r.text);
+                
+                // 1. Show Toast (when app is open)
                 this.showToast(`🔔 ${r.text}`);
                 
                 // 2. Vibrate
@@ -629,36 +570,58 @@
                 // 3. Play Sound
                 this.playSound();
                 
-                // 4. Browser Notification (WORKS WHEN APP IS CLOSED)
+                // 4. Browser Notification - ATTEMPT 1 (Direct)
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
-                        const notif = new Notification('⏰ REMINDER!', {
+                        const notif1 = new Notification('⏰ REMINDER!', {
                             body: r.text,
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                             badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                            tag: r.id.toString(),
+                            tag: 'reminder-' + r.id,
                             requireInteraction: true,
                             vibrate: [500, 200, 500, 200, 500],
                             silent: false,
-                            data: { reminderId: r.id }
+                            priority: 'high',
+                            renotify: true
                         });
-                        
-                        notif.onclick = () => {
-                            window.focus();
-                            notif.close();
-                        };
+                        console.log('Notification 1 sent');
                     } catch (e) {
-                        console.error('Notification error:', e);
+                        console.error('Notification 1 error:', e);
                     }
                 }
                 
-                // 5. Send to Service Worker for background delivery
+                // 5. Browser Notification - ATTEMPT 2 (Via Service Worker)
                 if (window.swRegistration && window.swRegistration.active) {
-                    window.swRegistration.active.postMessage({
-                        type: 'TRIGGER_NOW',
-                        reminder: r
-                    });
+                    try {
+                        window.swRegistration.active.postMessage({
+                            type: 'TRIGGER_NOTIFICATION',
+                            reminder: r
+                        });
+                        console.log('Notification 2 sent via SW');
+                    } catch (e) {
+                        console.error('Notification 2 error:', e);
+                    }
                 }
+                
+                // 6. Browser Notification - ATTEMPT 3 (Delayed retry)
+                setTimeout(() => {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            const notif3 = new Notification('⏰ REMINDER!', {
+                                body: r.text,
+                                icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                tag: 'reminder-' + r.id + '-retry',
+                                requireInteraction: true,
+                                vibrate: [500, 200, 500, 200, 500],
+                                silent: false
+                            });
+                            console.log('Notification 3 sent (retry)');
+                        } catch (e) {
+                            console.error('Notification 3 error:', e);
+                        }
+                    }
+                }, 1000);
             }
 
             playSound() {
@@ -704,11 +667,16 @@
                     this.showToast('✓ Notifications enabled');
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                     
+                    // Test notification to verify it works
                     new Notification('Smart Reminder', {
-                        body: 'You will get alerts even when app is closed!',
+                        body: 'Notifications are working! You will see this in your notification bar.',
                         icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                        vibrate: [200, 100, 200]
+                        vibrate: [200, 100, 200],
+                        requireInteraction: true,
+                        tag: 'test-notification'
                     });
+                } else {
+                    this.showToast('⚠️ Please enable notifications in browser settings');
                 }
             }
 
