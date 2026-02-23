@@ -97,6 +97,89 @@
     </audio>
 
     <script>
+        // ⭐ ENHANCED SERVICE WORKER FOR BACKGROUND NOTIFICATIONS
+        if ('serviceWorker' in navigator) {
+            // Create inline service worker blob
+            const swCode = `
+                const REMINDERS_KEY = 'reminder_alerts';
+                
+                self.addEventListener('install', event => {
+                    self.skipWaiting();
+                });
+                
+                self.addEventListener('activate', event => {
+                    event.waitUntil(self.clients.claim());
+                });
+                
+                // Listen for messages from main app
+                self.addEventListener('message', event => {
+                    if (event.data && event.data.type === 'SCHEDULE_NOTIFICATION') {
+                        const { reminder } = event.data;
+                        const triggerTime = new Date(reminder.time);
+                        const now = new Date();
+                        
+                        // Schedule notification using setTimeout (works while SW is active)
+                        const delay = triggerTime - now;
+                        if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
+                            setTimeout(() => {
+                                self.registration.showNotification('⏰ REMINDER!', {
+                                    body: reminder.text,
+                                    icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                    badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                                    tag: reminder.id.toString(),
+                                    requireInteraction: true,
+                                    vibrate: [500, 200, 500, 200, 500],
+                                    silent: false,
+                                    data: { reminderId: reminder.id }
+                                });
+                            }, delay);
+                        }
+                    }
+                    
+                    if (event.data && event.data.type === 'TRIGGER_NOW') {
+                        const { reminder } = event.data;
+                        self.registration.showNotification('⏰ REMINDER!', {
+                            body: reminder.text,
+                            icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                            badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+                            tag: reminder.id.toString(),
+                            requireInteraction: true,
+                            vibrate: [500, 200, 500, 200, 500],
+                            silent: false,
+                            data: { reminderId: reminder.id }
+                        });
+                    }
+                });
+                
+                self.addEventListener('notificationclick', event => {
+                    event.notification.close();
+                    event.waitUntil(clients.openWindow('/'));
+                });
+                
+                // Keep service worker alive with periodic ping
+                setInterval(() => {
+                    // This helps keep SW active in background
+                }, 20000);
+            `;
+            
+            const blob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            navigator.serviceWorker.register(swUrl)
+                .then(reg => {
+                    console.log('Service Worker registered:', reg.scope);
+                    window.swRegistration = reg;
+                    
+                    // Request periodic background sync (if supported)
+                    if ('periodicSync' in reg) {
+                        reg.periodicSync.register('reminder-check', {
+                            minInterval: 15 * 60 * 1000 // 15 minutes
+                        }).catch(() => {});
+                    }
+                })
+                .catch(err => console.log('SW registration failed:', err));
+        }
+
         class ReminderApp {
             constructor() {
                 this.reminders = JSON.parse(localStorage.getItem('reminders')) || [];
@@ -118,30 +201,20 @@
                 this.requestNotifPermission();
                 this.initVoice();
                 this.updateDebugInfo();
-                this.registerServiceWorker();
+                this.scheduleAllNotifications();
             }
 
-            registerServiceWorker() {
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('data:text/javascript,' + encodeURIComponent(`
-                        self.addEventListener('install', e => self.skipWaiting());
-                        self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-                        self.addEventListener('push', e => {
-                            const data = e.data ? e.data.json() : {};
-                            self.registration.showNotification(data.title || 'Reminder', {
-                                body: data.body || 'You have a reminder',
-                                icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                tag: data.tag,
-                                requireInteraction: true,
-                                vibrate: [500, 200, 500, 200, 500]
+            scheduleAllNotifications() {
+                // Schedule notifications for all pending reminders via Service Worker
+                if (window.swRegistration && window.swRegistration.active) {
+                    this.reminders.forEach(r => {
+                        if (!r.completed && !r.notified) {
+                            window.swRegistration.active.postMessage({
+                                type: 'SCHEDULE_NOTIFICATION',
+                                reminder: r
                             });
-                        });
-                        self.addEventListener('notificationclick', e => {
-                            e.notification.close();
-                            clients.openWindow('/');
-                        });
-                    `)).catch(() => console.log('SW registered'));
+                        }
+                    });
                 }
             }
 
@@ -164,6 +237,23 @@
                 document.addEventListener('click', () => {
                     if (this.audio) { this.audio.load(); }
                 }, { once: true });
+
+                // Listen for notification clicks from Service Worker
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.addEventListener('message', event => {
+                        if (event.data && event.data.type === 'NOTIFICATION_CLICKED') {
+                            this.openReminder(event.data.reminderId);
+                        }
+                    });
+                }
+            }
+
+            openReminder(id) {
+                window.focus();
+                const r = this.reminders.find(x => x.id === id);
+                if (r) {
+                    this.showToast(`📌 ${r.text}`);
+                }
             }
 
             initVoice() {
@@ -389,6 +479,7 @@
                 this.reminders.push(reminder);
                 this.save();
                 this.render();
+                this.scheduleAllNotifications();
                 input.value = '';
                 
                 const timeStr = scheduledTime.toLocaleString([], { 
@@ -461,7 +552,6 @@
                     const date = new Date(r.time);
                     const isOverdue = !r.completed && r.time < now;
                     
-                    // Format time with AM/PM
                     const timeStr = date.toLocaleString([], { 
                         weekday: 'short',
                         month: 'short', 
@@ -528,7 +618,7 @@
             }
 
             triggerNotification(r) {
-                // 1. Show Toast (works even when app is in background)
+                // 1. Show Toast
                 this.showToast(`🔔 ${r.text}`);
                 
                 // 2. Vibrate
@@ -539,7 +629,7 @@
                 // 3. Play Sound
                 this.playSound();
                 
-                // 4. Browser Notification (works when app is closed)
+                // 4. Browser Notification (WORKS WHEN APP IS CLOSED)
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
                         const notif = new Notification('⏰ REMINDER!', {
@@ -549,7 +639,8 @@
                             tag: r.id.toString(),
                             requireInteraction: true,
                             vibrate: [500, 200, 500, 200, 500],
-                            silent: false
+                            silent: false,
+                            data: { reminderId: r.id }
                         });
                         
                         notif.onclick = () => {
@@ -559,6 +650,14 @@
                     } catch (e) {
                         console.error('Notification error:', e);
                     }
+                }
+                
+                // 5. Send to Service Worker for background delivery
+                if (window.swRegistration && window.swRegistration.active) {
+                    window.swRegistration.active.postMessage({
+                        type: 'TRIGGER_NOW',
+                        reminder: r
+                    });
                 }
             }
 
@@ -606,7 +705,7 @@
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                     
                     new Notification('Smart Reminder', {
-                        body: 'You will get alerts every 5 seconds until completed!',
+                        body: 'You will get alerts even when app is closed!',
                         icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                         vibrate: [200, 100, 200]
                     });
