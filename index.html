@@ -97,7 +97,7 @@
     </audio>
 
     <script>
-        // ⭐ MAXIMUM NOTIFICATION SUPPORT
+        // Service Worker for background notifications
         if ('serviceWorker' in navigator) {
             const swCode = `
                 self.addEventListener('install', e => self.skipWaiting());
@@ -107,7 +107,6 @@
                     if (event.data && event.data.type === 'TRIGGER_NOTIFICATION') {
                         const { reminder } = event.data;
                         
-                        // Show notification with maximum visibility
                         self.registration.showNotification('⏰ REMINDER!', {
                             body: reminder.text,
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
@@ -118,25 +117,16 @@
                             silent: false,
                             priority: 'max',
                             urgency: 'high',
-                            renotify: true,
-                            actions: [
-                                { action: 'dismiss', title: 'Dismiss' },
-                                { action: 'snooze', title: 'Snooze 5min' }
-                            ]
+                            renotify: true
                         });
                     }
                 });
                 
                 self.addEventListener('notificationclick', event => {
                     event.notification.close();
-                    if (event.action === 'dismiss') {
-                        // Dismissed
-                    } else {
-                        event.waitUntil(clients.openWindow('/'));
-                    }
+                    event.waitUntil(clients.openWindow('/'));
                 });
                 
-                // Keep SW alive
                 setInterval(() => {}, 25000);
             `;
             
@@ -288,8 +278,9 @@
                 const lower = text.toLowerCase();
                 let timeSet = false;
 
+                // ✅ FIXED: Now handles "pm", "p.m.", "p m", etc.
                 const timePatterns = [
-                    /(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)/i,
+                    /(\d{1,2})\s*(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i,
                     /(\d{1,2}):(\d{2})/
                 ];
 
@@ -301,8 +292,11 @@
                         const ampm = match[3];
 
                         if (ampm) {
-                            if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
-                            if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+                            // ✅ FIXED: Normalize by removing dots
+                            const normalizedAmpm = ampm.toLowerCase().replace(/\./g, '');
+                            
+                            if (normalizedAmpm === 'pm' && hours < 12) hours += 12;
+                            if (normalizedAmpm === 'am' && hours === 12) hours = 0;
                         }
 
                         target.setHours(hours, minutes, 0, 0);
@@ -555,11 +549,8 @@
                 }, 1000);
             }
 
-            // ⭐ ENHANCED NOTIFICATION - Multiple attempts for maximum visibility
             triggerNotification(r) {
-                console.log('🔔 Triggering notification:', r.text);
-                
-                // 1. Show Toast (when app is open)
+                // 1. Show Toast
                 this.showToast(`🔔 ${r.text}`);
                 
                 // 2. Vibrate
@@ -570,10 +561,10 @@
                 // 3. Play Sound
                 this.playSound();
                 
-                // 4. Browser Notification - ATTEMPT 1 (Direct)
+                // 4. Browser Notification - Attempt 1
                 if ('Notification' in window && Notification.permission === 'granted') {
                     try {
-                        const notif1 = new Notification('⏰ REMINDER!', {
+                        new Notification('⏰ REMINDER!', {
                             body: r.text,
                             icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                             badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
@@ -584,44 +575,22 @@
                             priority: 'high',
                             renotify: true
                         });
-                        console.log('Notification 1 sent');
                     } catch (e) {
-                        console.error('Notification 1 error:', e);
+                        console.error('Notification error:', e);
                     }
                 }
                 
-                // 5. Browser Notification - ATTEMPT 2 (Via Service Worker)
+                // 5. Via Service Worker - Attempt 2
                 if (window.swRegistration && window.swRegistration.active) {
                     try {
                         window.swRegistration.active.postMessage({
                             type: 'TRIGGER_NOTIFICATION',
                             reminder: r
                         });
-                        console.log('Notification 2 sent via SW');
                     } catch (e) {
-                        console.error('Notification 2 error:', e);
+                        console.error('SW notification error:', e);
                     }
                 }
-                
-                // 6. Browser Notification - ATTEMPT 3 (Delayed retry)
-                setTimeout(() => {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        try {
-                            const notif3 = new Notification('⏰ REMINDER!', {
-                                body: r.text,
-                                icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                badge: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
-                                tag: 'reminder-' + r.id + '-retry',
-                                requireInteraction: true,
-                                vibrate: [500, 200, 500, 200, 500],
-                                silent: false
-                            });
-                            console.log('Notification 3 sent (retry)');
-                        } catch (e) {
-                            console.error('Notification 3 error:', e);
-                        }
-                    }
-                }, 1000);
             }
 
             playSound() {
@@ -667,9 +636,9 @@
                     this.showToast('✓ Notifications enabled');
                     document.getElementById('notifBtn').innerHTML = '<i class="fas fa-bell" style="color:#10b981"></i>';
                     
-                    // Test notification to verify it works
+                    // Test notification
                     new Notification('Smart Reminder', {
-                        body: 'Notifications are working! You will see this in your notification bar.',
+                        body: 'Notifications are working! Check your notification bar.',
                         icon: 'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
                         vibrate: [200, 100, 200],
                         requireInteraction: true,
